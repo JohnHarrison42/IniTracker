@@ -18,7 +18,7 @@ if "initiative_list" not in st.session_state:
     st.session_state.initiative_list = pd.DataFrame(columns=["Name", "Armor Class", "Initiative"])
 
 # Function to add a character to the initiative list
-def add_to_initiative(name, ac, initiative):
+def add_to_initiative_callback(name, ac, initiative):
     st.session_state.pool = st.session_state.pool[st.session_state.pool["Name"] != name]
     new_row = {"Name": name, "Armor Class": ac, "Initiative": initiative}
     st.session_state.initiative_list = pd.concat(
@@ -27,7 +27,7 @@ def add_to_initiative(name, ac, initiative):
     st.session_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
 
 # Function to remove a character from the initiative list
-def remove_from_initiative(name, ac):
+def remove_from_initiative_callback(name, ac):
     st.session_state.initiative_list = st.session_state.initiative_list[
         st.session_state.initiative_list["Name"] != name
     ]
@@ -44,8 +44,12 @@ for index, row in st.session_state.pool.iterrows():
         st.write(f"**{row['Name']}** (AC: {row['Armor Class']})")
     with col2:
         initiative = st.slider(f"Initiative for {row['Name']}", 1, 30, key=f"ini_{row['Name']}")
-        if st.button(f"Enter {row['Name']}", key=f"enter_{row['Name']}"):
-            add_to_initiative(row["Name"], row["Armor Class"], initiative)
+        st.button(
+            f"Enter {row['Name']}",
+            key=f"enter_{row['Name']}",
+            on_click=add_to_initiative_callback,
+            args=(row["Name"], row["Armor Class"], initiative),
+        )
 
 # Initiative list
 st.header("Initiative List")
@@ -55,8 +59,12 @@ for index, row in st.session_state.initiative_list.iterrows():
     with col1:
         st.write(f"**{row['Name']}** (AC: {row['Armor Class']}, Initiative: {row['Initiative']})")
     with col2:
-        if st.button(f"Remove {row['Name']}", key=f"remove_{row['Name']}"):
-            remove_from_initiative(row["Name"], row["Armor Class"])
+        st.button(
+            f"Remove {row['Name']}",
+            key=f"remove_{row['Name']}",
+            on_click=remove_from_initiative_callback,
+            args=(row["Name"], row["Armor Class"]),
+        )
 
 # Add or remove characters from the pool
 st.header("Manage Character Pool")
@@ -68,6 +76,3 @@ with st.form("add_character"):
         st.session_state.pool = pd.concat(
             [st.session_state.pool, pd.DataFrame([new_row])], ignore_index=True
         )
-
-# Save as .py file if needed
-st.caption("Use Streamlit to run this app: `streamlit run your_file_name.py`")
