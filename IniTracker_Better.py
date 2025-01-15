@@ -17,6 +17,9 @@ if "pool" not in st.session_state:
 if "initiative_list" not in st.session_state:
     st.session_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Initiative"])
 
+if "new_character" not in st.session_state:
+    st.session_state.new_character = {"Name": "", "Armor Class": 10}
+
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
     character = st.session_state.pool.loc[st.session_state.pool["ID"] == character_id].iloc[0]
@@ -35,6 +38,17 @@ def remove_from_initiative_callback(character_id):
         [st.session_state.pool, pd.DataFrame([{"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"]}])], 
         ignore_index=True
     )
+
+# Add a new character to the pool
+def add_new_character():
+    new_id = st.session_state.pool["ID"].max() + 1 if not st.session_state.pool.empty else 1
+    new_name = st.session_state.new_character["Name"]
+    new_ac = st.session_state.new_character["Armor Class"]
+    new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac}
+    st.session_state.pool = pd.concat(
+        [st.session_state.pool, pd.DataFrame([new_row])], ignore_index=True
+    )
+    st.session_state.new_character = {"Name": "", "Armor Class": 10}  # Reset form inputs
 
 # Pool of characters
 st.header("Character Pool")
@@ -69,13 +83,7 @@ for index, row in st.session_state.initiative_list.iterrows():
 
 # Add or remove characters from the pool
 st.header("Manage Character Pool")
-with st.form("add_character"):
-    new_name = st.text_input("Character Name")
-    new_ac = st.number_input("Armor Class", min_value=1, max_value=30, value=10)
-    if st.form_submit_button("Add Character"):
-        new_id = st.session_state.pool["ID"].max() + 1 if not st.session_state.pool.empty else 1
-        new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac}
-        st.session_state.pool = pd.concat(
-            [st.session_state.pool, pd.DataFrame([new_row])], ignore_index=True
-        )
-        st.experimental_rerun()  # Refresh the app to reflect the changes
+st.text_input("Character Name", key="new_character_name", on_change=lambda: st.session_state.new_character.update({"Name": st.session_state.new_character_name}))
+st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac", on_change=lambda: st.session_state.new_character.update({"Armor Class": st.session_state.new_character_ac}))
+if st.button("Add Character"):
+    add_new_character()
