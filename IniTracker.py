@@ -1,13 +1,52 @@
 import streamlit as st
 import pandas as pd
 
+st.markdown(
+    """
+    <style>
+    /* General button styling */
+    div.stButton > button {
+        font-size: 18px;
+        padding: 10px 20px;
+        border-radius: 8px;
+        min-width: 150px;
+        min-height: 50px;
+    }
+
+    /* Small buttons */
+    .small-button > button {
+        font-size: 12px;
+        padding: 6px 12px;
+        border-radius: 5px;
+    }
+
+    /* Large buttons */
+    .large-button > button {
+        font-size: 20px;
+        padding: 12px 24px;
+        border-radius: 10px;
+    }
+
+    /* Ensure text inside buttons resizes properly */
+    div.stButton > button > span {
+        font-size: 18px;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+
+
 # Initial data for the pool of characters
 initial_pool = [
-    {"ID": 1, "Name": "Aragorn", "Armor Class": 16},
-    {"ID": 2, "Name": "Legolas", "Armor Class": 15},
-    {"ID": 3, "Name": "Gimli", "Armor Class": 17},
-    {"ID": 4, "Name": "Frodo", "Armor Class": 12},
-    {"ID": 5, "Name": "Gandalf", "Armor Class": 14},
+    {"ID": 1, "Name": "Zeno", "Armor Class": 16},
+    {"ID": 2, "Name": "Berinel", "Armor Class": 15},
+    {"ID": 3, "Name": "Ludovika", "Armor Class": 17},
+    {"ID": 4, "Name": "Elris", "Armor Class": 12},
+    {"ID": 5, "Name": "Francesco", "Armor Class": 14},
+    {"ID": 6, "Name": "Taja", "Armor Class": 13},
+    {"ID": 7, "Name": "Niemand", "Armor Class": 14},
 ]
 
 # Initialize session state
@@ -49,36 +88,53 @@ def add_new_character():
         [st.session_state.pool, pd.DataFrame([new_row])], ignore_index=True
     )
     st.session_state.new_character = {"Name": "", "Armor Class": 10}  # Reset form inputs
+    st.rerun()  # Force UI refresh
 
 # Pool of characters
 st.header("Character Pool")
-st.write("Click a character to add them to the initiative list.")
 for index, row in st.session_state.pool.iterrows():
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3, col4 = st.columns([0.9, 2, 1, 0.1], gap="medium", vertical_alignment="center")  # Add a fourth column for remove button
     with col1:
-        st.write(f"**{row['Name']}** (AC: {row['Armor Class']})")
+        st.write(f"**{row['Name']}** (AC {row['Armor Class']})")
     with col2:
-        initiative = st.slider(f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}")
+        initiative = st.slider(
+            f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}"
+        )
+    with col3:
         st.button(
             f"Enter {row['Name']}",
             key=f"enter_{row['ID']}",
             on_click=add_to_initiative_callback,
             args=(row["ID"], initiative),
+            use_container_width=True,
         )
+    with col4:
+        st.button(
+            f"Remove {row['Name']}",
+            key=f"remove_pool_{index}_{row['ID']}",
+            on_click=lambda character_id=row["ID"]: st.session_state.pool.drop(
+                st.session_state.pool[st.session_state.pool["ID"] == character_id].index,
+                inplace=True,
+            ),
+            use_container_width=True,
+        )
+
 
 # Initiative list
 st.header("Initiative List")
-st.write("Click 'Remove' to send a character back to the pool.")
 for index, row in st.session_state.initiative_list.iterrows():
-    col1, col2 = st.columns([3, 1])
+    col1, col2, col3 = st.columns([0.4, 0.25, 0.5], vertical_alignment="center")
     with col1:
-        st.write(f"**{row['Name']}** (AC: {row['Armor Class']}, Initiative: {row['Initiative']})")
+        st.write(f"**{row['Name']}** (AC {row['Armor Class']})")
     with col2:
+        st.markdown(f"<p style='font-size: 30px;  vertical-align: middle; '>{row['Initiative']}</p>", unsafe_allow_html=True)
+    with col3:
         st.button(
             f"Remove {row['Name']}",
-            key=f"remove_{row['ID']}",
+            key=f"remove_{index}_{row['ID']}",
             on_click=remove_from_initiative_callback,
             args=(row["ID"],),
+            use_container_width=True  # Forces the button to stretch within the column
         )
 
 # Add or remove characters from the pool
