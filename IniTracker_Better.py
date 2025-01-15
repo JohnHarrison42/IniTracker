@@ -3,7 +3,7 @@ import pandas as pd
 
 # Initial data for the pool of characters
 initial_pool = [
-    {"ID": 1, "Name": "Aragorn", "Armor Class": 16},
+    {"ID": 1, "Name": "Aragornnnnnnnnn", "Armor Class": 16},
     {"ID": 2, "Name": "Legolas", "Armor Class": 15},
     {"ID": 3, "Name": "Gimli", "Armor Class": 17},
     {"ID": 4, "Name": "Frodo", "Armor Class": 12},
