@@ -40,13 +40,13 @@ st.markdown(
 
 # Initial data for the pool of characters
 initial_pool = [
-    {"ID": 1, "Name": "Zeno", "Armor Class": 16},
-    {"ID": 2, "Name": "Berinel", "Armor Class": 15},
-    {"ID": 3, "Name": "Ludovika", "Armor Class": 17},
-    {"ID": 4, "Name": "Elris", "Armor Class": 12},
-    {"ID": 5, "Name": "Francesco", "Armor Class": 14},
-    {"ID": 6, "Name": "Taja", "Armor Class": 13},
-    {"ID": 7, "Name": "Niemand", "Armor Class": 14},
+    {"ID": 1, "Name": "Zeno", "Armor Class": 16, "HP": 20},
+    {"ID": 2, "Name": "Berinel", "Armor Class": 15, "HP": 30},
+    {"ID": 3, "Name": "Ludovika", "Armor Class": 17, "HP": 40},
+    {"ID": 4, "Name": "Elris", "Armor Class": 12, "HP": 50},
+    {"ID": 5, "Name": "Francesco", "Armor Class": 14, "HP": 60},
+    {"ID": 6, "Name": "Taja", "Armor Class": 13}, "HP": 70,
+    {"ID": 7, "Name": "Niemand", "Armor Class": 14, "HP": 80},
 ]
 
 # Initialize session state
@@ -57,7 +57,7 @@ if "initiative_list" not in st.session_state:
     st.session_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Initiative"])
 
 if "new_character" not in st.session_state:
-    st.session_state.new_character = {"Name": "", "Armor Class": 10}
+    st.session_state.new_character = {"Name": "", "Armor Class": 10, "HP": 10}
 
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
