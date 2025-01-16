@@ -142,6 +142,6 @@ for index, row in st.session_state.initiative_list.iterrows():
 st.header("Manage Character Pool")
 st.text_input("Character Name", key="new_character_name", on_change=lambda: st.session_state.new_character.update({"Name": st.session_state.new_character_name}))
 st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac", on_change=lambda: st.session_state.new_character.update({"Armor Class": st.session_state.new_character_ac}))
-st.number_input("Hitpoints", min_value=1, value=10, key="new_character_hp", on_change=lambda: st.session_state.new_character.update({"Hitpoints": st.session_state.new_character_ac}))
+st.number_input("Hitpoints", min_value=1, value=10, key="new_character_hp", on_change=lambda: st.session_state.new_character.update({"Hitpoints": st.session_state.new_character_hp}))
 if st.button("Add Character"):
     add_new_character()
