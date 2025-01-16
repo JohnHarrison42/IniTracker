@@ -40,13 +40,13 @@ st.markdown(
 
 # Initial data for the pool of characters
 initial_pool = [
-    {"ID": 1, "Name": "Zeno", "Armor Class": 16, "Hitpoints": 20},
-    {"ID": 2, "Name": "Berinel", "Armor Class": 15, "Hitpoints": 30},
-    {"ID": 3, "Name": "Ludovika", "Armor Class": 17, "Hitpoints": 40},
-    {"ID": 4, "Name": "Elris", "Armor Class": 12, "Hitpoints": 50},
-    {"ID": 5, "Name": "Francesco", "Armor Class": 14, "Hitpoints": 60},
-    {"ID": 6, "Name": "Taja", "Armor Class": 13, "Hitpoints": 70},
-    {"ID": 7, "Name": "Niemand", "Armor Class": 14, "Hitpoints": 80},
+    {"ID": 1, "Name": "Zeno", "Armor Class": 16},
+    {"ID": 2, "Name": "Berinel", "Armor Class": 15},
+    {"ID": 3, "Name": "Ludovika", "Armor Class": 17},
+    {"ID": 4, "Name": "Elris", "Armor Class": 12},
+    {"ID": 5, "Name": "Francesco", "Armor Class": 14},
+    {"ID": 6, "Name": "Taja", "Armor Class": 13},
+    {"ID": 7, "Name": "Niemand", "Armor Class": 14},
 ]
 
 # Initialize session state
@@ -54,16 +54,16 @@ if "pool" not in st.session_state:
     st.session_state.pool = pd.DataFrame(initial_pool)
 
 if "initiative_list" not in st.session_state:
-    st.session_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative"])
+    st.session_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Initiative"])
 
 if "new_character" not in st.session_state:
-    st.session_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
+    st.session_state.new_character = {"Name": "", "Armor Class": 10}
 
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
     character = st.session_state.pool.loc[st.session_state.pool["ID"] == character_id].iloc[0]
     st.session_state.pool = st.session_state.pool[st.session_state.pool["ID"] != character_id]
-    new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"], "Initiative": initiative}
+    new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Initiative": initiative}
     st.session_state.initiative_list = pd.concat(
         [st.session_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
     )
@@ -74,7 +74,7 @@ def remove_from_initiative_callback(character_id):
     character = st.session_state.initiative_list.loc[st.session_state.initiative_list["ID"] == character_id].iloc[0]
     st.session_state.initiative_list = st.session_state.initiative_list[st.session_state.initiative_list["ID"] != character_id]
     st.session_state.pool = pd.concat(
-        [st.session_state.pool, pd.DataFrame([{"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"]}])], 
+        [st.session_state.pool, pd.DataFrame([{"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"]}])], 
         ignore_index=True
     )
 
@@ -83,23 +83,19 @@ def add_new_character():
     new_id = st.session_state.pool["ID"].max() + 1 if not st.session_state.pool.empty else 1
     new_name = st.session_state.new_character["Name"]
     new_ac = st.session_state.new_character["Armor Class"]
-    new_hp = st.session_state.new_character["Hitpoints"]
-    new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
+    new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac}
     st.session_state.pool = pd.concat(
         [st.session_state.pool, pd.DataFrame([new_row])], ignore_index=True
     )
-    st.session_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}  # Reset form inputs
+    st.session_state.new_character = {"Name": "", "Armor Class": 10}  # Reset form inputs
     st.rerun()  # Force UI refresh
-
-def edit_hp():
-    return
 
 # Pool of characters
 st.header("Character Pool")
 for index, row in st.session_state.pool.iterrows():
     col1, col2, col3, col4 = st.columns([0.9, 2, 1, 0.1], gap="medium", vertical_alignment="center")  # Add a fourth column for remove button
     with col1:
-        st.write(f"**{row['Name']}** (AC {row['Armor Class']}, HP {row['Hitpoints']})")
+        st.write(f"**{row['Name']}** (AC {row['Armor Class']})")
     with col2:
         initiative = st.slider(
             f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}"
@@ -127,11 +123,9 @@ for index, row in st.session_state.pool.iterrows():
 # Initiative list
 st.header("Initiative List")
 for index, row in st.session_state.initiative_list.iterrows():
-    col0, col1, col2, col3 = st.columns([0.5, 0.4, 0.25, 0.5], vertical_alignment="center")
-    with col0:
-        st.number_input("Hitpoints", min_value=1, value=row['Hitpoints'])
+    col1, col2, col3 = st.columns([0.4, 0.25, 0.5], vertical_alignment="center")
     with col1:
-        st.write(f"**{row['Name']}** (AC {row['Armor Class']}, HP {row['Hitpoints']})")
+        st.write(f"**{row['Name']}** (AC {row['Armor Class']})")
     with col2:
         st.markdown(f"<p style='font-size: 30px;  vertical-align: middle; '>{row['Initiative']}</p>", unsafe_allow_html=True)
     with col3:
@@ -147,6 +141,16 @@ for index, row in st.session_state.initiative_list.iterrows():
 st.header("Manage Character Pool")
 st.text_input("Character Name", key="new_character_name", on_change=lambda: st.session_state.new_character.update({"Name": st.session_state.new_character_name}))
 st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac", on_change=lambda: st.session_state.new_character.update({"Armor Class": st.session_state.new_character_ac}))
-st.number_input("Hitpoints", min_value=1, value=10, key="new_character_hp", on_change=lambda: st.session_state.new_character.update({"Hitpoints": st.session_state.new_character_hp}))
 if st.button("Add Character"):
     add_new_character()
+
+def add_new_character():
+    new_id = st.session_state.pool["ID"].max() + 1 if not st.session_state.pool.empty else 1
+    new_name = st.session_state.new_character["Name"]
+    new_ac = st.session_state.new_character["Armor Class"]
+    new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac}
+    st.session_state.pool = pd.concat(
+        [st.session_state.pool, pd.DataFrame([new_row])], ignore_index=True
+    )
+    st.session_state.new_character = {"Name": "", "Armor Class": 10}  # Reset form inputs
+    st.rerun()  # Force UI refresh
