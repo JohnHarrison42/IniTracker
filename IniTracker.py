@@ -2,6 +2,12 @@ import streamlit as st
 import pandas as pd
 from streamlit_server_state import server_state, server_state_lock
 
+if "view_mode" not in st.session_state:
+    st.session_state.view_mode = "DM"
+
+mode = st.toggle("DM Mode")
+st.session_state.view_mode = mode
+
 # CSS for button styling
 st.markdown(
     """
@@ -124,21 +130,22 @@ for index, row in server_state.pool.iterrows():
         )
 
 # Initiative list
-st.header("Initiative List")
-for index, row in server_state.initiative_list.iterrows():
-    col1, col2, col3 = st.columns([0.5, 0.2, 0.4], vertical_alignment="center")
-    with col1:
-        st.markdown(f"<p style='font-size: 22px; vertical-align: middle;'>{row['Name']} (AC <span style='color: green;'>{row['Armor Class']}</span>, HP <span style='color: red;'>{row['Hitpoints']}</span>)</p>", unsafe_allow_html=True)
-    with col2:
-        st.markdown(f"<p style='font-size: 30px; vertical-align: middle;'><span style='color: blue;'>{row['Initiative']}</span></p>", unsafe_allow_html=True)
-    with col3:
-        st.button(
-            f"Remove {row['Name']}",
-            key=f"remove_{index}_{row['ID']}",
-            on_click=remove_from_initiative_callback,
-            args=(row["ID"],),
-            use_container_width=True  # Forces the button to stretch within the column
-        )
+if st.session_state.view_mode:
+    st.header("Initiative List")
+    for index, row in server_state.initiative_list.iterrows():
+        col1, col2, col3 = st.columns([0.5, 0.2, 0.4], vertical_alignment="center")
+        with col1:
+            st.markdown(f"<p style='font-size: 22px; vertical-align: middle;'>{row['Name']} (AC <span style='color: green;'>{row['Armor Class']}</span>, HP <span style='color: red;'>{row['Hitpoints']}</span>)</p>", unsafe_allow_html=True)
+        with col2:
+            st.markdown(f"<p style='font-size: 30px; vertical-align: middle;'><span style='color: blue;'>{row['Initiative']}</span></p>", unsafe_allow_html=True)
+        with col3:
+            st.button(
+                f"Remove {row['Name']}",
+                key=f"remove_{index}_{row['ID']}",
+                on_click=remove_from_initiative_callback,
+                args=(row["ID"],),
+                use_container_width=True  # Forces the button to stretch within the column
+            )
 
 
 # This block handles user inputs
