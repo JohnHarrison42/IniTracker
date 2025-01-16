@@ -91,6 +91,9 @@ def add_new_character():
     st.session_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}  # Reset form inputs
     st.rerun()  # Force UI refresh
 
+def edit_hp():
+    return
+
 # Pool of characters
 st.header("Character Pool")
 for index, row in st.session_state.pool.iterrows():
@@ -124,7 +127,9 @@ for index, row in st.session_state.pool.iterrows():
 # Initiative list
 st.header("Initiative List")
 for index, row in st.session_state.initiative_list.iterrows():
-    col1, col2, col3 = st.columns([0.4, 0.25, 0.5], vertical_alignment="center")
+    col0, col1, col2, col3 = st.columns([0.5, 0.4, 0.25, 0.5], vertical_alignment="center")
+    with col0:
+        st.number_input("Hitpoints", min_value=1, value=row['Hitpoints'])
     with col1:
         st.write(f"**{row['Name']}** (AC {row['Armor Class']}, HP {row['Hitpoints']})")
     with col2:
