@@ -147,6 +147,11 @@ if st.session_state.view_mode:
                 use_container_width=True  # Forces the button to stretch within the column
             )
 
+def reset():
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["new_character"]:
+        server_state.pool = pd.DataFrame(initial_pool)
+        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative"])
+        server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
 
 # This block handles user inputs
 st.header("Manage Character Pool")
@@ -154,12 +159,20 @@ new_name = st.text_input("Character Name", key="new_character_name")
 new_ac = st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
 new_hp = st.number_input("Hitpoints", min_value=1, value=10, key="new_character_hp")
 
+col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
+with col1:
 # This block adds the new character to the pool when the button is pressed
-if st.button("Add Character") and not st.session_state.button_pressed:
-    st.session_state.button_pressed = True  # Set flag to True to prevent re-triggering
-    with server_state_lock["new_character"]:
-        server_state.new_character["Name"] = new_name
-        server_state.new_character["Armor Class"] = new_ac
-        server_state.new_character["Hitpoints"] = new_hp
-        add_new_character(new_name, new_ac, new_hp)  # Pass the values to the function
-st.session_state.button_pressed = False  # Reset flag after the logic completes
+    if st.button("Add Character") and not st.session_state.button_pressed:
+        st.session_state.button_pressed = True  # Set flag to True to prevent re-triggering
+        with server_state_lock["new_character"]:
+            server_state.new_character["Name"] = new_name
+            server_state.new_character["Armor Class"] = new_ac
+            server_state.new_character["Hitpoints"] = new_hp
+            add_new_character(new_name, new_ac, new_hp)  # Pass the values to the function
+    st.session_state.button_pressed = False  # Reset flag after the logic completes
+with col2:
+    if st.button("Reset"):
+        reset()
+with col3:
+    if st.button("Initiative"):
+        None
