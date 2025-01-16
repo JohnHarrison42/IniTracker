@@ -129,7 +129,7 @@ st.header("Initiative List")
 for index, row in st.session_state.initiative_list.iterrows():
     col0, col1, col2, col3 = st.columns([0.5, 0.4, 0.25, 0.5], vertical_alignment="center")
     with col0:
-        st.number_input(min_value=1, value=row['Hitpoints'])
+        st.number_input("Hitpoints", min_value=1, value=row['Hitpoints'])
     with col1:
         st.write(f"**{row['Name']}** (AC {row['Armor Class']}, HP {row['Hitpoints']})")
     with col2:
