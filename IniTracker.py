@@ -37,22 +37,20 @@ initial_pool = [
     {"ID": 7, "Name": "Niemand", "Armor Class": 14, "Hitpoints": 80},
 ]
 
-if st.session_state.get("_is_session_initialized", False) is False:
+if "pool" not in server_state:
     with server_state_lock["pool"]:
         server_state.pool = pd.DataFrame(initial_pool)
-    st.session_state["_is_session_initialized"] = True
 
-if st.session_state.get("_is_session_initialized", False) is False:
+if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
-            server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
-    st.session_state["_is_session_initialized"] = True
+        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
 
-with server_state_lock["new_character"]:
-    if "new_character" not in server_state:
+if "new_character" not in server_state:
+    with server_state_lock["new_character"]:
         server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
 
-with server_state_lock["initiative"]:
-    if "initiative" not in server_state:
+if "initiative" not in server_state:
+    with server_state_lock["initiative"]:
         server_state.initiative = 0
         
 if "button_pressed" not in st.session_state:
