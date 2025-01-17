@@ -37,19 +37,15 @@ initial_pool = [
     {"ID": 7, "Name": "Niemand", "Armor Class": 14, "Hitpoints": 80},
 ]
 
-# Initialize global states if not already present
-#with server_state_lock["pool"]:
-#    if "pool" not in server_state:
-#        server_state.pool = pd.DataFrame(initial_pool)
-
 if st.session_state.get("_is_session_initialized", False) is False:
     with server_state_lock["pool"]:
         server_state.pool = pd.DataFrame(initial_pool)
     st.session_state["_is_session_initialized"] = True
 
-with server_state_lock["initiative_list"]:
-    if "initiative_list" not in server_state:
-        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+if st.session_state.get("_is_session_initialized", False) is False:
+    with server_state_lock["initiative_list"]:
+            server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+    st.session_state["_is_session_initialized"] = True
 
 with server_state_lock["new_character"]:
     if "new_character" not in server_state:
