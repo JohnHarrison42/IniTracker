@@ -2,9 +2,10 @@ import streamlit as st
 import pandas as pd
 from streamlit_server_state import server_state, server_state_lock
 
+
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "DM"
-
+    
 mode = st.toggle("DM Mode")
 st.session_state.view_mode = mode
 
@@ -20,30 +21,10 @@ st.markdown(
         min-width: 150px;
         min-height: 50px;
     }
-
-    /* Small buttons */
-    .small-button > button {
-        font-size: 12px;
-        padding: 6px 12px;
-        border-radius: 5px;
-    }
-
-    /* Large buttons */
-    .large-button > button {
-        font-size: 20px;
-        padding: 12px 24px;
-        border-radius: 10px;
-    }
-
-    /* Ensure text inside buttons resizes properly */
-    div.stButton > button > span {
-        font-size: 18px;
-    }
     </style>
     """,
     unsafe_allow_html=True,
 )
-
 
 # Initial data for the pool of characters
 initial_pool = [
@@ -57,13 +38,18 @@ initial_pool = [
 ]
 
 # Initialize global states if not already present
-with server_state_lock["pool"]:
-    if "pool" not in server_state:
+#with server_state_lock["pool"]:
+#    if "pool" not in server_state:
+#        server_state.pool = pd.DataFrame(initial_pool)
+
+if st.session_state.get("_is_session_initialized", False) is False:
+    with server_state_lock["pool"]:
         server_state.pool = pd.DataFrame(initial_pool)
+    st.session_state["_is_session_initialized"] = True
 
 with server_state_lock["initiative_list"]:
     if "initiative_list" not in server_state:
-        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative"])
+        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
 
 with server_state_lock["new_character"]:
     if "new_character" not in server_state:
@@ -72,13 +58,22 @@ with server_state_lock["new_character"]:
 with server_state_lock["initiative"]:
     if "initiative" not in server_state:
         server_state.initiative = 0
+        
+if "button_pressed" not in st.session_state:
+    st.session_state.button_pressed = False
+    
+if "ini_pressed" not in st.session_state:
+    st.session_state.ini_pressed = False
+
+if "ini_length" not in server_state:
+    server_state.ini_length = 0
 
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
-    with server_state_lock["pool"], server_state_lock["initiative_list"]:
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         character = server_state.pool.loc[server_state.pool["ID"] == character_id].iloc[0]
         server_state.pool = server_state.pool[server_state.pool["ID"] != character_id]
-        new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"], "Initiative": initiative}
+        new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"], "Initiative": initiative, "Indicator": ""}
         server_state.initiative_list = pd.concat(
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
@@ -103,11 +98,54 @@ def add_new_character(new_name, new_ac, new_hp):
             [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
         )
         server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}  # Reset form inputs
-        
+
+def ini_cycle():
+    with server_state_lock["initiative"], server_state_lock["initiative_list"]:
+        if not server_state.initiative_list.empty:
+            server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
+            server_state.initiative_list["Indicator"] = ""
+            if server_state.initiative >= len(server_state.initiative_list):
+                server_state.initiative = 0
+            current_character_id = server_state.initiative_list.iloc[server_state.initiative]["ID"] 
+            if len(server_state.initiative_list) > 2:
+                if server_state.initiative + 2 >= len(server_state.initiative_list):
+                    if server_state.initiative + 1 == len(server_state.initiative_list):
+                        skip_character_id = server_state.initiative_list.iloc[1]["ID"]
+                    else:
+                        skip_character_id = server_state.initiative_list.iloc[0]["ID"]
+                else:
+                    skip_character_id = server_state.initiative_list.iloc[server_state.initiative + 2]["ID"]
+                if "previous_character_id" not in server_state:
+                    server_state.previous_character_id = None
+                if current_character_id == server_state.previous_character_id:
+                    server_state.initiative -= 1
+                server_state.previous_character_id = skip_character_id
+                server_state.next_initiative = server_state.initiative + 1
+            else:
+                if "next_initiative" not in server_state:
+                    server_state.next_initiative = 0
+                if server_state.next_initiative == 2:
+                    server_state.initiative = 1
+                    server_state.next_initiative = 0
+                if server_state.next_initiative == 1:
+                    server_state.initiative = 0
+                    server_state.next_initiative = 0
+            if server_state.ini_length < len(server_state.initiative_list):
+                length = len(server_state.initiative_list) - server_state.ini_length
+                if server_state.initiative + length +1 >= len(server_state.initiative_list):
+                    server_state.initiative = 0
+                else:
+                    server_state.initiative += length + 1
+            server_state.initiative_list.iloc[
+                server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
+            ] = "➤"
+            server_state.ini_length = len(server_state.initiative_list)
+            server_state.initiative += 1
+
 # Pool of characters
 st.header("Character Pool")
 for index, row in server_state.pool.iterrows():
-    col1, col2, col3, col4 = st.columns([1.3, 2, 1, 0.1], gap="medium", vertical_alignment="center")  # Add a fourth column for remove button
+    col1, col2, col3, col4 = st.columns([1.3, 2, 1, 0.1], gap="medium", vertical_alignment="center")
     with col1:
         st.write(f"**{row['Name']}** (AC {row['Armor Class']}, HP {row['Hitpoints']})")
     with col2:
@@ -132,39 +170,36 @@ for index, row in server_state.pool.iterrows():
             ),
             use_container_width=True,
         )
-
-def ini_cycle():
-    with server_state_lock["initiative"],  server_state_lock["initiative_list"]: 
-        if server_state.initiative == 0:
-            server_state.initiative = 1
-        else:
-            server_state.initiative += 1
-        server_state.initiative_list
         
 
 # Initiative list
 if st.session_state.view_mode:
     st.header("Initiative List")
     for index, row in server_state.initiative_list.iterrows():
-        col1, col2, col3 = st.columns([0.5, 0.2, 0.4], vertical_alignment="center")
+        col1, col2, col3, col4 = st.columns([0.1, 0.5, 0.2, 0.2], vertical_alignment="center")
         with col1:
-            st.markdown(f"<p style='font-size: 22px; vertical-align: middle;'>{row['Name']} (AC <span style='color: green;'>{row['Armor Class']}</span>, HP <span style='color: red;'>{row['Hitpoints']}</span>)</p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 22px;'><span style='color: orange;'>{row['Indicator']}</span></p>", unsafe_allow_html=True)
         with col2:
-            st.markdown(f"<p style='font-size: 30px; vertical-align: middle;'><span style='color: blue;'>{row['Initiative']}</span></p>", unsafe_allow_html=True)
+            st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (AC <span style='color: green;'>{row['Armor Class']}</span>, HP <span style='color: red;'>{row['Hitpoints']}</span>)</p>", unsafe_allow_html=True)
         with col3:
+            st.markdown(f"<p style='font-size: 30px;'><span style='color: blue;'>{row['Initiative']}</span></p>", unsafe_allow_html=True)
+        with col4:
             st.button(
                 f"Remove {row['Name']}",
                 key=f"remove_{index}_{row['ID']}",
                 on_click=remove_from_initiative_callback,
                 args=(row["ID"],),
-                use_container_width=True  # Forces the button to stretch within the column
+                use_container_width=True
             )
 
+           
 def reset():
-    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["new_character"]:
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["new_character"], server_state_lock["Initiative"]:
         server_state.pool = pd.DataFrame(initial_pool)
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative"])
         server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
+        server_state.initiative = 0
+        
 
 # This block handles user inputs
 st.header("Manage Character Pool")
@@ -187,5 +222,7 @@ with col2:
     if st.button("Reset"):
         reset()
 with col3:
-    if st.button("DO NOT CLICK"):
+    if st.button("Initiative") and not st.session_state.ini_pressed:
+        st.session_state.ini_pressed = True
         ini_cycle()
+    st.session_state.ini_pressed = False
