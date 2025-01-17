@@ -69,6 +69,10 @@ with server_state_lock["new_character"]:
     if "new_character" not in server_state:
         server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
 
+with server_state_lock["initiative"]:
+    if "initiative" not in server_state:
+        server_state.initiative = 0
+
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"]:
@@ -129,6 +133,15 @@ for index, row in server_state.pool.iterrows():
             use_container_width=True,
         )
 
+def ini_cycle():
+    with server_state_lock["initiative"],  server_state_lock["initiative_list"]: 
+        if server_state.initiative == 0:
+            server_state.initiative = 1
+        else:
+            server_state.initiative += 1
+        server_state.initiative_list
+        
+
 # Initiative list
 if st.session_state.view_mode:
     st.header("Initiative List")
@@ -175,4 +188,4 @@ with col2:
         reset()
 with col3:
     if st.button("Initiative"):
-        None
+        ini_cycle()
