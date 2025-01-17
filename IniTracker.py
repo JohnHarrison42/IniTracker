@@ -62,6 +62,17 @@ if "ini_pressed" not in st.session_state:
 if "ini_length" not in server_state:
     server_state.ini_length = 0
 
+col1, col2 = st.columns([0.25, 0.5])
+with col1:
+    st.header("Select Your Character")
+    character_names = ["All"] + list(server_state.pool["Name"])  # Add "All" to show all characters
+    selected_character = st.selectbox("Choose your character:", character_names, key="character_select")
+    
+if selected_character != "All":
+    filtered_pool = server_state.pool[server_state.pool["Name"] == selected_character]
+else:
+    filtered_pool = server_state.pool
+
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
@@ -138,7 +149,7 @@ def ini_cycle():
 
 # Pool of characters
 st.header("Character Pool")
-for index, row in server_state.pool.iterrows():
+for index, row in filtered_pool.iterrows():
     col1, col2, col3, col4 = st.columns([1.3, 2, 1, 0.1], gap="medium", vertical_alignment="center")
     with col1:
         st.write(f"**{row['Name']}** (AC {row['Armor Class']}, HP {row['Hitpoints']})")
