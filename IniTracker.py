@@ -187,5 +187,5 @@ with col2:
     if st.button("Reset"):
         reset()
 with col3:
-    if st.button("Initiative"):
+    if st.button("DO NOT CLICK"):
         ini_cycle()
