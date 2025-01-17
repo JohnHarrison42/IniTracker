@@ -196,10 +196,13 @@ if st.session_state.view_mode:
 def reset():
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["new_character"], server_state_lock["Initiative"]:
         server_state.pool = pd.DataFrame(initial_pool)
-        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative"])
+        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
         server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
         server_state.initiative = 0
-        
+        server_state.ini_length = 0
+        server_state.next_initiative = 0
+        server_state.current_character_id = None
+        server_state.previous_character_id = None
 
 # This block handles user inputs
 st.header("Manage Character Pool")
