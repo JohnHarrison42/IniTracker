@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_server_state import server_state, server_state_lock
+import time
 
 
 if "view_mode" not in st.session_state:
@@ -72,6 +73,15 @@ if selected_character != "All":
     filtered_pool = server_state.pool[server_state.pool["Name"] == selected_character]
 else:
     filtered_pool = server_state.pool
+
+def save_character_pool():
+    with server_state_lock["pool"]:
+        server_state.pool.to_csv("character_pool.csv", index=False)
+        
+def load_character_pool():
+    with server_state_lock["pool"]:
+        server_state.pool = pd.read_csv("character_pool.csv")
+
 
 # Function to add a character to the initiative list
 def add_to_initiative_callback(character_id, initiative):
@@ -234,3 +244,17 @@ with col3:
         st.session_state.ini_pressed = True
         ini_cycle()
     st.session_state.ini_pressed = False
+
+col1, col2 = st.columns([0.5, 0.8])
+with col1:
+    if st.button("Save Characters"):
+        save_character_pool()
+        saved = st.success("Character pool saved successfully!")
+        time.sleep(3)
+        saved.empty()
+with col2:
+    if st.button("Load Characters"):
+        load_character_pool()
+        loaded = st.success("Character pool loaded successfully!")
+        time.sleep(3)
+        loaded.empty()
