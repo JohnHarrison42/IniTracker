@@ -12,7 +12,6 @@ st.session_state.view_mode = mode
 ini_mode = st.toggle("Initiative Mode")
 st.session_state.ini_mode = ini_mode
 
-# CSS for button styling
 st.markdown(
     """
     <style>
@@ -29,7 +28,6 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Initial data for the pool of characters
 initial_pool = [
     {"ID": 1, "Name": "Zeno", "Armor Class": 16, "Hitpoints": 20},
     {"ID": 2, "Name": "Berinel", "Armor Class": 15, "Hitpoints": 30},
@@ -39,12 +37,10 @@ initial_pool = [
     {"ID": 6, "Name": "Taja", "Armor Class": 13, "Hitpoints": 70},
     {"ID": 7, "Name": "Niemand", "Armor Class": 14, "Hitpoints": 80},
 ]
-try:
-    if "pool" not in server_state:
-        with server_state_lock["pool"]:
-            server_state.pool = pd.DataFrame(initial_pool)
-except server_state.session_info.NoSessionError:
-    pass
+
+if "pool" not in server_state:
+    with server_state_lock["pool"]:
+        server_state.pool = pd.DataFrame(initial_pool)
 
 if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
@@ -78,7 +74,7 @@ if not st.session_state.ini_mode:
     st.header("Character Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
-        character_names = ["All"] + list(server_state.pool["Name"])  # Add "All" to show all characters
+        character_names = ["All"] + list(server_state.pool["Name"])
         selected_character = st.selectbox("Choose your character:", character_names, key="character_select")
     
     if selected_character != "All":
@@ -94,9 +90,7 @@ def load_character_pool():
     with server_state_lock["pool"]:
         server_state.pool = pd.read_csv("character_pool.csv")
 
-
-# Function to add a character to the initiative list
-def add_to_initiative_callback(character_id, initiative):
+def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         character = server_state.pool.loc[server_state.pool["ID"] == character_id].iloc[0]
         server_state.pool = server_state.pool[server_state.pool["ID"] != character_id]
@@ -106,8 +100,7 @@ def add_to_initiative_callback(character_id, initiative):
         )
         server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
 
-# Function to remove a character from the initiative list
-def remove_from_initiative_callback(character_id):
+def remove_from_initiative(character_id):
     with server_state_lock["pool"], server_state_lock["initiative_list"]:
         character = server_state.initiative_list.loc[server_state.initiative_list["ID"] == character_id].iloc[0]
         server_state.initiative_list = server_state.initiative_list[server_state.initiative_list["ID"] != character_id]
@@ -116,7 +109,6 @@ def remove_from_initiative_callback(character_id):
             ignore_index=True,
         )
 
-# Add a new character to the pool
 def add_new_character(new_name, new_ac, new_hp):
     with server_state_lock["pool"]:
         new_id = server_state.pool["ID"].max() + 1 if not server_state.pool.empty else server_state.initiative_list["ID"].max() + 1
@@ -124,6 +116,10 @@ def add_new_character(new_name, new_ac, new_hp):
         server_state.pool = pd.concat(
             [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
         )
+
+def delete_character(character_id):
+    with server_state_lock["pool"]:
+        server_state.pool = server_state.pool.loc[server_state.pool["ID"] != character_id]
 
 def ini_cycle():
     with server_state_lock["initiative"], server_state_lock["initiative_list"]:
@@ -167,8 +163,8 @@ def ini_cycle():
             server_state.initiative_list.iloc[
                 server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
             ] = '➤'
-            for l1, l2 in zip(server_state.initiative_list[['ID', 'Indicator']].values.tolist(), server_state.prev_ini_list):
-                if l1[0] == l2[0] and l1[1] == l2[1] == '➤':
+            for Ident, Indicat in zip(server_state.initiative_list[['ID', 'Indicator']].values.tolist(), server_state.prev_ini_list):
+                if Ident[0] == Indicat[0] and Ident[1] == Indicat[1] == '➤':
                     server_state.initiative_list["Indicator"] = ""
                     server_state.initiative += 1
                     server_state.initiative_list.iloc[
@@ -178,7 +174,6 @@ def ini_cycle():
             server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
             server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
-# Pool of characters
 if not st.session_state.ini_mode:
     st.header("Character Pool")
     for index, row in filtered_pool.iterrows():
@@ -193,7 +188,7 @@ if not st.session_state.ini_mode:
             st.button(
                 f"Enter {row['Name']}",
                 key=f"enter_{row['ID']}",
-                on_click=add_to_initiative_callback,
+                on_click=add_to_initiative,
                 args=(row["ID"], initiative),
                 use_container_width=True,
             )
@@ -201,15 +196,10 @@ if not st.session_state.ini_mode:
             st.button(
                 f"Delete {row['Name']}",
                 key=f"remove_pool_{index}_{row['ID']}",
-                on_click=lambda character_id=row["ID"]: server_state.pool.drop(
-                    server_state.pool[server_state.pool["ID"] == character_id].index,
-                    inplace=True,
-                ),
+                on_click=lambda character_id=row["ID"]: delete_character(character_id),
                 use_container_width=True,
             )
         
-
-# Initiative list
 if st.session_state.view_mode:
     st.header("Initiative List")
     for index, row in server_state.initiative_list.iterrows():
@@ -228,7 +218,7 @@ if st.session_state.view_mode:
             st.button(
                 f"Remove {row['Name']}",
                 key=f"remove_{index}_{row['ID']}",
-                on_click=remove_from_initiative_callback,
+                on_click=remove_from_initiative,
                 args=(row["ID"],),
                 use_container_width=True
             )
@@ -278,14 +268,13 @@ if not st.session_state.ini_mode:
 
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
     with col1:
-    # This block adds the new character to the pool when the button is pressed
         if st.button("Add Character") and not st.session_state.button_pressed:
-            st.session_state.button_pressed = True  # Set flag to True to prevent re-triggering
+            st.session_state.button_pressed = True
             st.session_state.new_character["Name"] = new_name
             st.session_state.new_character["Armor Class"] = new_ac
             st.session_state.new_character["Hitpoints"] = new_hp
-            add_new_character(new_name, new_ac, new_hp)  # Pass the values to the function
-        st.session_state.button_pressed = False  # Reset flag after the logic completes
+            add_new_character(new_name, new_ac, new_hp)
+        st.session_state.button_pressed = False
     with col2:
         if st.button("Reset", on_click=clear):
             reset()
