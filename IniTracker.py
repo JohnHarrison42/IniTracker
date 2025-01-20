@@ -59,6 +59,14 @@ if "initiative" not in server_state:
     with server_state_lock["initiative"]:
         server_state.initiative = 0
         
+if "prev_ini" not in server_state:
+    with server_state_lock["prev_ini"]:
+        server_state.prev_ini = []
+        
+if "prev_ini_list" not in server_state:
+    with server_state_lock["prev_ini_list"]:
+        server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        
 if "button_pressed" not in st.session_state:
     st.session_state.button_pressed = False
     
@@ -124,11 +132,10 @@ def ini_cycle():
     with server_state_lock["initiative"], server_state_lock["initiative_list"]:
         if not server_state.initiative_list.empty:
             server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
-            server_state.initiative_list["Indicator"] = ""
             if server_state.initiative >= len(server_state.initiative_list):
                 server_state.initiative = 0
-            current_character_id = server_state.initiative_list.iloc[server_state.initiative]["ID"] 
             if len(server_state.initiative_list) > 2:
+                current_character_id = server_state.initiative_list.iloc[server_state.initiative]["ID"] 
                 if server_state.initiative + 2 >= len(server_state.initiative_list):
                     if server_state.initiative + 1 == len(server_state.initiative_list):
                         skip_character_id = server_state.initiative_list.iloc[1]["ID"]
@@ -151,11 +158,28 @@ def ini_cycle():
                 if server_state.next_initiative == 1:
                     server_state.initiative = 0
                     server_state.next_initiative = 0
+            if server_state.prev_ini != server_state.initiative_list['ID'].values.tolist():
+                server_state.initiative_list = server_state.initiative_list.reset_index(drop=True)
+                indicator_id = next((entry[0] for entry in server_state.prev_ini_list if entry[1] == '➤'), None)
+                if any('➤' in entry for entry in server_state.initiative_list['Indicator'].values.tolist()):
+                    if indicator_id in server_state.initiative_list['ID'].values:
+                        for pos, row in server_state.initiative_list.iterrows():
+                            if row['ID'] == indicator_id:
+                                server_state.initiative = pos + 1
+            server_state.initiative_list["Indicator"] = ""
             server_state.initiative_list.iloc[
                 server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
-            ] = "➤"
+            ] = '➤'
+            for l1, l2 in zip(server_state.initiative_list[['ID', 'Indicator']].values.tolist(), server_state.prev_ini_list):
+                if l1[0] == l2[0] and l1[1] == l2[1] == '➤':
+                    server_state.initiative_list["Indicator"] = ""
+                    server_state.initiative += 1
+                    server_state.initiative_list.iloc[
+                    server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
+                    ] = '➤'
             server_state.initiative += 1
-            server_state.prev_ini = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
+            server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
+            server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
 # Pool of characters
 if not st.session_state.ini_mode:
@@ -241,6 +265,8 @@ def reset():
         server_state.next_initiative = 0
         server_state.current_character_id = None
         server_state.previous_character_id = None
+        server_state.prev_ini = []
+        server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
 
 # This block handles user inputs
 if not st.session_state.ini_mode:
