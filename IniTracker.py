@@ -185,7 +185,7 @@ def ini_cycle():
 if not st.session_state.ini_mode:
     st.header("Character Pool")
     for index, row in filtered_pool.iterrows():
-        col1, col2, col3, col4 = st.columns([1, 2, 1, 0.1], gap="medium", vertical_alignment="center")
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center")
         with col1:
             st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
         with col2:
