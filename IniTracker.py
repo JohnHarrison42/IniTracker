@@ -1,9 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_server_state import server_state, server_state_lock
-from streamlit_server_state.session_info import NoSessionError
 import time
-
 
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "DM"
@@ -52,9 +50,8 @@ if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
 
-if "new_character" not in server_state:
-    with server_state_lock["new_character"]:
-        server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
+if "new_character" not in st.session_state:
+        st.session_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
 
 if "initiative" not in server_state:
     with server_state_lock["initiative"]:
@@ -121,13 +118,12 @@ def remove_from_initiative_callback(character_id):
 
 # Add a new character to the pool
 def add_new_character(new_name, new_ac, new_hp):
-    with server_state_lock["pool"], server_state_lock["new_character"]:
+    with server_state_lock["pool"]:
         new_id = server_state.pool["ID"].max() + 1 if not server_state.pool.empty else server_state.initiative_list["ID"].max() + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         server_state.pool = pd.concat(
             [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
         )
-        server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}  # Reset form inputs
 
 def ini_cycle():
     with server_state_lock["initiative"], server_state_lock["initiative_list"]:
@@ -139,7 +135,7 @@ def ini_cycle():
                 current_character_id = server_state.initiative_list.iloc[server_state.initiative]["ID"] 
                 if server_state.initiative + 2 >= len(server_state.initiative_list):
                     if server_state.initiative + 1 == len(server_state.initiative_list):
-                        skip_character_id = server_state.initiative_list.iloc[1]["ID"]
+                        skip_character_id = server_state.initiative_list.iloc[1]["ID"]  
                     else:
                         skip_character_id = server_state.initiative_list.iloc[0]["ID"]
                 else:
@@ -186,7 +182,7 @@ def ini_cycle():
 if not st.session_state.ini_mode:
     st.header("Character Pool")
     for index, row in filtered_pool.iterrows():
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center")
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
         with col1:
             st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
         with col2:
@@ -257,10 +253,9 @@ def toggle_edit_hp():
             del st.session_state[key]
            
 def reset():
-    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["new_character"], server_state_lock["Initiative"]:
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"]:
         server_state.pool = pd.DataFrame(initial_pool)
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
-        server_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
         server_state.initiative = 0
         server_state.ini_length = 0
         server_state.next_initiative = 0
@@ -268,6 +263,11 @@ def reset():
         server_state.previous_character_id = None
         server_state.prev_ini = []
         server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+
+def clear():
+    st.session_state.new_character_name = ""
+    st.session_state.new_character_ac = 10
+    st.session_state.new_character_hp = 10
 
 # This block handles user inputs
 if not st.session_state.ini_mode:
@@ -281,14 +281,13 @@ if not st.session_state.ini_mode:
     # This block adds the new character to the pool when the button is pressed
         if st.button("Add Character") and not st.session_state.button_pressed:
             st.session_state.button_pressed = True  # Set flag to True to prevent re-triggering
-            with server_state_lock["new_character"]:
-                server_state.new_character["Name"] = new_name
-                server_state.new_character["Armor Class"] = new_ac
-                server_state.new_character["Hitpoints"] = new_hp
-                add_new_character(new_name, new_ac, new_hp)  # Pass the values to the function
+            st.session_state.new_character["Name"] = new_name
+            st.session_state.new_character["Armor Class"] = new_ac
+            st.session_state.new_character["Hitpoints"] = new_hp
+            add_new_character(new_name, new_ac, new_hp)  # Pass the values to the function
         st.session_state.button_pressed = False  # Reset flag after the logic completes
     with col2:
-        if st.button("Reset"):
+        if st.button("Reset", on_click=clear):
             reset()
     with col3:
         if st.button("Initiative") and not st.session_state.ini_pressed:
