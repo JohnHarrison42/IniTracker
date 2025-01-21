@@ -93,7 +93,7 @@ def load_character_pool():
 def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         character = server_state.pool.loc[server_state.pool["ID"] == character_id].iloc[0]
-        server_state.pool = server_state.pool[server_state.pool["ID"] != character_id]
+        server_state.pool = server_state.pool.loc[server_state.pool["ID"] != character_id]
         new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"], "Initiative": initiative, "Indicator": ""}
         server_state.initiative_list = pd.concat(
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
