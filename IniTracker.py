@@ -203,7 +203,7 @@ if not st.session_state.ini_mode:
 if st.session_state.view_mode:
     st.header("Initiative List")
     for index, row in server_state.initiative_list.iterrows():
-        col1, col2, col3, col4, col5 = st.columns([0.2, 1.3, 0.6, 0.8, 0.8], gap="medium", vertical_alignment="center")
+        col1, col2, col3, col4, col5 = st.columns([0.15, 1.6, 0.4, 0.8, 0.8], gap="medium", vertical_alignment="center")
         with col1:
             st.markdown(f"<p style='font-size: 22px;'>{row['Indicator']}</p>", unsafe_allow_html=True)
         with col2:
