@@ -109,13 +109,14 @@ def remove_from_initiative(character_id):
             ignore_index=True,
         )
 
-def add_new_character(new_name, new_ac, new_hp):
+def add_new_character(new_name, new_ac, new_hp, new_initiative):
     with server_state_lock["pool"]:
         new_id = server_state.pool["ID"].max() + 1 if not server_state.pool.empty else server_state.initiative_list["ID"].max() + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         server_state.pool = pd.concat(
             [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
         )
+        add_to_initiative(new_id, new_initiative)
 
 def delete_character(character_id):
     with server_state_lock["pool"]:
@@ -175,7 +176,7 @@ def ini_cycle():
             server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
 if not st.session_state.ini_mode and not st.session_state.view_mode:
-    st.header("Character Pool")
+    st.header("Characters")
     for index, row in filtered_pool.iterrows():
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
         with col1:
@@ -260,15 +261,18 @@ def clear():
     st.session_state.new_name = st.session_state.new_character_name
     st.session_state.new_ac = st.session_state.new_character_ac
     st.session_state.new_hp = st.session_state.new_character_hp
+    st.session_state.new_initiative = st.session_state.new_character_initiative
     st.session_state.new_character_name = ""
     st.session_state.new_character_ac = 10
     st.session_state.new_character_hp = 10
+    st.session_state.new_character_initiative = 1
 
 if not st.session_state.ini_mode and st.session_state.view_mode:
-    st.header("Manage Character Pool")
+    st.header("Add Characters")
     st.text_input("Character Name", key="new_character_name")
     st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
     st.number_input("Hitpoints", min_value=0, value=10, key="new_character_hp")
+    st.slider("Initiative", 1, 30, key="new_character_initiative")
 
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
     with col1:
@@ -276,8 +280,9 @@ if not st.session_state.ini_mode and st.session_state.view_mode:
             new_name = st.session_state.new_name
             new_ac = st.session_state.new_ac
             new_hp = st.session_state.new_hp
+            new_initiative = st.session_state.new_initiative
             st.session_state.button_pressed = True
-            add_new_character(new_name, new_ac, new_hp)
+            add_new_character(new_name, new_ac, new_hp, new_initiative)
         st.session_state.button_pressed = False
     with col2:
         if st.button("Reset", on_click=clear):
