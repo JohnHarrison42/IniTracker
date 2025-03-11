@@ -66,11 +66,11 @@ if "button_pressed" not in st.session_state:
     
 if "ini_pressed" not in st.session_state:
     st.session_state.ini_pressed = False
+    
+if "edit_hp_values" not in st.session_state:
+    st.session_state.edit_hp_values = {}
 
-if "edit_hp" not in st.session_state:
-    st.session_state.edit_hp = False
-
-if not st.session_state.ini_mode:
+if not st.session_state.ini_mode and not st.session_state.view_mode:
     st.header("Character Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
@@ -174,7 +174,7 @@ def ini_cycle():
             server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
             server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
-if not st.session_state.ini_mode:
+if not st.session_state.ini_mode and not st.session_state.view_mode:
     st.header("Character Pool")
     for index, row in filtered_pool.iterrows():
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
@@ -200,7 +200,7 @@ if not st.session_state.ini_mode:
                 use_container_width=True,
             )
         
-if st.session_state.view_mode:
+if st.session_state.view_mode or st.session_state.ini_mode:
     st.header("Initiative List")
     for index, row in server_state.initiative_list.iterrows():
         col1, col2, col3, col4, col5 = st.columns([0.15, 1.4, 0.4, 0.8, 0.8], gap="medium", vertical_alignment="center")
@@ -223,25 +223,24 @@ if st.session_state.view_mode:
                 use_container_width=True
             )
         with col5:
-            if st.session_state.edit_hp:
-                new_hp = st.number_input(
-                    f"Edit HP for {row['Name']}",
-                    min_value=0,
-                    value=row["Hitpoints"],
-                    key=f"edit_hp_{row['ID']}",
-                    label_visibility="collapsed"
-                )
-                if new_hp != row["Hitpoints"]:
-                    with server_state_lock["initiative_list"]:
-                        server_state.initiative_list.loc[server_state.initiative_list["ID"] == row["ID"], "Hitpoints"] = new_hp
-                        st.rerun()
-            
+            st.session_state.edit_hp_values[row['ID']] = row["Hitpoints"]
+            hp_change = st.number_input(
+                f"Edit HP for {row['Name']}",
+                value=0,
+                key=f"edit_hp_{row['ID']}",
+                label_visibility="collapsed"
+            )
+            st.session_state.edit_hp_values[row['ID']] = hp_change
+      
 def toggle_edit_hp():
-    st.session_state.edit_hp = not st.session_state.edit_hp
-    for key in st.session_state.keys():
-        if key.startswith("edit_hp_"):
-            del st.session_state[key]
-           
+    with server_state_lock["initiative_list"]:
+        for row_id, new_hp in st.session_state.edit_hp_values.items():
+            current_hp = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
+            new_hp = current_hp - new_hp
+            server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = new_hp
+    for row_id in st.session_state.edit_hp_values:
+            st.session_state[f"edit_hp_{row_id}"] = 0
+            
 def reset():
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"]:
         server_state.pool = pd.DataFrame(initial_pool)
@@ -255,24 +254,26 @@ def reset():
         server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
 
 def clear():
+    st.session_state.new_name = st.session_state.new_character_name
+    st.session_state.new_ac = st.session_state.new_character_ac
+    st.session_state.new_hp = st.session_state.new_character_hp
     st.session_state.new_character_name = ""
     st.session_state.new_character_ac = 10
     st.session_state.new_character_hp = 10
 
-# This block handles user inputs
-if not st.session_state.ini_mode:
+if not st.session_state.ini_mode and st.session_state.view_mode:
     st.header("Manage Character Pool")
-    new_name = st.text_input("Character Name", key="new_character_name")
-    new_ac = st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
-    new_hp = st.number_input("Hitpoints", min_value=0, value=10, key="new_character_hp")
+    st.text_input("Character Name", key="new_character_name")
+    st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
+    st.number_input("Hitpoints", min_value=0, value=10, key="new_character_hp")
 
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
     with col1:
-        if st.button("Add Character") and not st.session_state.button_pressed:
+        if st.button("Add Character", on_click=clear) and not st.session_state.button_pressed:
+            new_name = st.session_state.new_name
+            new_ac = st.session_state.new_ac
+            new_hp = st.session_state.new_hp
             st.session_state.button_pressed = True
-            st.session_state.new_character["Name"] = new_name
-            st.session_state.new_character["Armor Class"] = new_ac
-            st.session_state.new_character["Hitpoints"] = new_hp
             add_new_character(new_name, new_ac, new_hp)
         st.session_state.button_pressed = False
     with col2:
