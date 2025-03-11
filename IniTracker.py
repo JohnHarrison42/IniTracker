@@ -226,18 +226,21 @@ if st.session_state.view_mode or st.session_state.ini_mode:
             st.session_state.edit_hp_values[row['ID']] = row["Hitpoints"]
             hp_change = st.number_input(
                 f"Edit HP for {row['Name']}",
-                value=0,
                 key=f"edit_hp_{row['ID']}",
-                label_visibility="collapsed"
+                label_visibility="collapsed",
+                step=1
             )
             st.session_state.edit_hp_values[row['ID']] = hp_change
       
 def toggle_edit_hp():
     with server_state_lock["initiative_list"]:
-        for row_id, new_hp in st.session_state.edit_hp_values.items():
+        for row_id, hp_change in st.session_state.edit_hp_values.items():
             current_hp = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
-            new_hp = current_hp - new_hp
-            server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = new_hp
+            if current_hp.item() < hp_change:
+                hp_change = 0
+            else:
+                hp_change = current_hp - hp_change
+            server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
     for row_id in st.session_state.edit_hp_values:
             st.session_state[f"edit_hp_{row_id}"] = 0
             
