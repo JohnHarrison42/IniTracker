@@ -12,6 +12,9 @@ st.session_state.view_mode = mode
 ini_mode = st.toggle("Initiative Mode")
 st.session_state.ini_mode = ini_mode
 
+exp_mode = st.toggle("Expert Mode")
+st.session_state.exp_mode = exp_mode
+
 st.markdown(
     """
     <style>
@@ -70,7 +73,7 @@ if "ini_pressed" not in st.session_state:
 if "edit_hp_values" not in st.session_state:
     st.session_state.edit_hp_values = {}
 
-if not st.session_state.ini_mode and not st.session_state.view_mode:
+if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Character Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
@@ -175,7 +178,7 @@ def ini_cycle():
             server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
             server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
-if not st.session_state.ini_mode and not st.session_state.view_mode:
+if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Characters")
     for index, row in filtered_pool.iterrows():
         col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
@@ -201,7 +204,7 @@ if not st.session_state.ini_mode and not st.session_state.view_mode:
                 use_container_width=True,
             )
         
-if st.session_state.view_mode or st.session_state.ini_mode:
+if st.session_state.view_mode or st.session_state.ini_mode or st.session_state.exp_mode:
     st.header("Initiative List")
     for index, row in server_state.initiative_list.iterrows():
         col1, col2, col3, col4, col5 = st.columns([0.15, 1.6, 0.4, 0.8, 0.8], gap="medium", vertical_alignment="center")
@@ -267,7 +270,7 @@ def clear():
     st.session_state.new_character_hp = 10
     st.session_state.new_character_initiative = 1
 
-if not st.session_state.ini_mode and st.session_state.view_mode:
+if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_state.exp_mode)) or (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Add Characters")
     st.text_input("Character Name", key="new_character_name")
     st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
@@ -309,7 +312,7 @@ if not st.session_state.ini_mode and st.session_state.view_mode:
     with col3:
         st.button("Edit HP", key="toggle_edit_hp", on_click=toggle_edit_hp)
     
-if st.session_state.ini_mode:
+if st.session_state.ini_mode and not st.session_state.exp_mode:
     col1, col2 = st.columns([0.2, 0.6])
     with col1:
         if st.button("Initiative") and not st.session_state.ini_pressed:
