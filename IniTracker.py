@@ -72,6 +72,10 @@ if "ini_pressed" not in st.session_state:
     
 if "edit_hp_values" not in st.session_state:
     st.session_state.edit_hp_values = {}
+    
+if "current_round" not in server_state:
+    with server_state_lock["current_round"]:
+        server_state.current_round = 1
 
 if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Character Selection")
@@ -107,14 +111,19 @@ def remove_from_initiative(character_id):
     with server_state_lock["pool"], server_state_lock["initiative_list"]:
         character = server_state.initiative_list.loc[server_state.initiative_list["ID"] == character_id].iloc[0]
         server_state.initiative_list = server_state.initiative_list[server_state.initiative_list["ID"] != character_id]
+        for char in initial_pool:
+            if char['ID'] == character_id:
+                character['Hitpoints'] = char['Hitpoints']
         server_state.pool = pd.concat(
             [server_state.pool, pd.DataFrame([{"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"]}])],
             ignore_index=True,
         )
+        if server_state.initiative_list.empty:
+            server_state.current_round = 1
 
 def add_new_character(new_name, new_ac, new_hp, new_initiative):
     with server_state_lock["pool"]:
-        new_id = server_state.pool["ID"].max() + 1 if not server_state.pool.empty else server_state.initiative_list["ID"].max() + 1
+        new_id = max(server_state.pool["ID"].max(), server_state.initiative_list["ID"].max()) + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         server_state.pool = pd.concat(
             [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
@@ -131,6 +140,7 @@ def ini_cycle():
             server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
             if server_state.initiative >= len(server_state.initiative_list):
                 server_state.initiative = 0
+                server_state.current_round += 1
             if len(server_state.initiative_list) > 2:
                 current_character_id = server_state.initiative_list.iloc[server_state.initiative]["ID"] 
                 if server_state.initiative + 2 >= len(server_state.initiative_list):
@@ -147,7 +157,7 @@ def ini_cycle():
                 server_state.previous_character_id = skip_character_id
                 server_state.next_initiative = server_state.initiative + 1
             else:
-                if "next_initiative" not in server_state:   
+                if "next_initiative" not in server_state:
                     server_state.next_initiative = 0
                 if server_state.next_initiative == 2:
                     server_state.initiative = 1
@@ -205,7 +215,7 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
             )
         
 if st.session_state.view_mode or st.session_state.ini_mode or st.session_state.exp_mode:
-    st.header("Initiative List")
+    st.header("Initiative - Round " + str(server_state.current_round))
     for index, row in server_state.initiative_list.iterrows():
         col1, col2, col3, col4, col5 = st.columns([0.15, 1.6, 0.4, 0.8, 0.8], gap="medium", vertical_alignment="center")
         with col1:
@@ -239,12 +249,15 @@ if st.session_state.view_mode or st.session_state.ini_mode or st.session_state.e
 def toggle_edit_hp():
     with server_state_lock["initiative_list"]:
         for row_id, hp_change in st.session_state.edit_hp_values.items():
-            current_hp = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
-            if current_hp.item() < hp_change:
-                hp_change = 0
-            else:
-                hp_change = current_hp - hp_change
-            server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
+            if row_id is not None and hp_change is not None:
+                hitpoints = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
+                if not hitpoints.empty:
+                    current_hp = hitpoints.iloc[0]
+                    if current_hp < hp_change:
+                        hp_change = 0
+                    else:
+                        hp_change = current_hp - hp_change
+                    server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
     for row_id in st.session_state.edit_hp_values:
             st.session_state[f"edit_hp_{row_id}"] = 0
             
@@ -259,6 +272,7 @@ def reset():
         server_state.previous_character_id = None
         server_state.prev_ini = []
         server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        server_state.current_round = 1
 
 def clear():
     st.session_state.new_name = st.session_state.new_character_name
@@ -312,7 +326,7 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
     with col3:
         st.button("Edit HP", key="toggle_edit_hp", on_click=toggle_edit_hp)
     
-if st.session_state.ini_mode and not st.session_state.exp_mode:
+if st.session_state.ini_mode and not (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
     col1, col2 = st.columns([0.2, 0.6])
     with col1:
         if st.button("Initiative") and not st.session_state.ini_pressed:
