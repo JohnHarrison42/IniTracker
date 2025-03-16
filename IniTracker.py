@@ -129,7 +129,10 @@ def remove_from_initiative(character_id):
 
 def add_new_character(new_name, new_ac, new_hp, new_initiative):
     with server_state_lock["pool"]:
-        new_id = max(server_state.pool["ID"].max(), server_state.initiative_list["ID"].max()) + 1
+        if server_state.pool.empty or server_state.pool["ID"].max() < server_state.initiative_list["ID"].max():
+            new_id = server_state.initiative_list["ID"].max() + 1
+        else:
+            new_id = server_state.pool["ID"].max() + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         server_state.pool = pd.concat(
             [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
