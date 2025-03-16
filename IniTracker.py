@@ -76,6 +76,12 @@ if "edit_hp_values" not in st.session_state:
 if "current_round" not in server_state:
     with server_state_lock["current_round"]:
         server_state.current_round = 1
+        
+if "show_input" not in st.session_state:
+    st.session_state.show_input = False
+    
+if "verification" not in st.session_state:
+    st.session_state.verification = ""
 
 if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Character Selection")
@@ -196,7 +202,7 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
             st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
         with col2:
             initiative = st.slider(
-                f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}"
+                f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}", label_visibility="collapsed"
             )
         with col3:
             st.button(
@@ -313,10 +319,23 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
     with col1:
         if st.button("Save Characters"):
-            save_character_pool()
-            saved = st.success("Character pool saved successfully!")
-            time.sleep(3)
-            saved.empty()
+            if not st.session_state.show_input:
+                st.session_state.show_input = True
+            elif st.session_state.verification == "Apfeltaschen":
+                save_character_pool()
+                saved = st.success("Character pool saved successfully!")
+                time.sleep(3)
+                saved.empty()
+                st.session_state.show_input = False
+            elif st.session_state.verification != "Apfeltaschen":
+                error = st.error("Incorrect verification code. Please try again.")
+                time.sleep(3)
+                error.empty()
+                st.session_state.show_input = False
+        if st.session_state.show_input:
+            st.session_state.verification = st.text_input("Verification Code")
+
+            
     with col2:
         if st.button("Load Characters"):
             load_character_pool()
