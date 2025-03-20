@@ -183,13 +183,17 @@ def ini_cycle():
                             if row['ID'] == indicator_id:
                                 server_state.initiative = pos + 1
             server_state.initiative_list["Indicator"] = ""
+            server_state.initiative = min(server_state.initiative, len(server_state.initiative_list) - 1)
             server_state.initiative_list.iloc[
                 server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
             ] = '➤'
             for Ident, Indicat in zip(server_state.initiative_list[['ID', 'Indicator']].values.tolist(), server_state.prev_ini_list):
                 if Ident[0] == Indicat[0] and Ident[1] == Indicat[1] == '➤':
                     server_state.initiative_list["Indicator"] = ""
-                    server_state.initiative += 1
+                    if len(server_state.initiative_list) > 1:
+                        server_state.initiative += 1
+                    else:
+                        server_state.initiative = 0
                     server_state.initiative_list.iloc[
                     server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
                     ] = '➤'
