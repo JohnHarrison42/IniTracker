@@ -145,61 +145,58 @@ def delete_character(character_id):
 
 def ini_cycle():
     with server_state_lock["initiative"], server_state_lock["initiative_list"]:
-        if not server_state.initiative_list.empty:
-            server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
-            if server_state.initiative >= len(server_state.initiative_list):
-                server_state.initiative = 0
-                server_state.current_round += 1
-            if len(server_state.initiative_list) > 2:
-                current_character_id = server_state.initiative_list.iloc[server_state.initiative]["ID"] 
-                if server_state.initiative + 2 >= len(server_state.initiative_list):
-                    if server_state.initiative + 1 == len(server_state.initiative_list):
-                        skip_character_id = server_state.initiative_list.iloc[1]["ID"]  
-                    else:
-                        skip_character_id = server_state.initiative_list.iloc[0]["ID"]
+        if server_state.initiative_list.empty:
+            return
+        server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
+        if server_state.initiative >= len(server_state.initiative_list):
+            server_state.initiative = 0
+            server_state.current_round += 1
+        if len(server_state.initiative_list) > 2:
+            current_character_id = server_state.initiative_list.at[server_state.initiative, "ID"]
+            if server_state.initiative + 2 >= len(server_state.initiative_list):
+                if server_state.initiative + 1 == len(server_state.initiative_list):
+                    skip_character_id = server_state.initiative_list.at[1, "ID"]
                 else:
-                    skip_character_id = server_state.initiative_list.iloc[server_state.initiative + 2]["ID"]
-                if "previous_character_id" not in server_state:
-                    server_state.previous_character_id = None
-                if current_character_id == server_state.previous_character_id:
-                    server_state.initiative -= 1
-                server_state.previous_character_id = skip_character_id
-                server_state.next_initiative = server_state.initiative + 1
+                    skip_character_id = server_state.initiative_list.at[0, "ID"]
             else:
-                if "next_initiative" not in server_state:
-                    server_state.next_initiative = 0
-                if server_state.next_initiative == 2:
-                    server_state.initiative = 1
-                    server_state.next_initiative = 0
-                if server_state.next_initiative == 1:
+                skip_character_id = server_state.initiative_list.at[server_state.initiative + 2, "ID"]
+            if "previous_character_id" not in server_state:
+                server_state.previous_character_id = None
+            if current_character_id == server_state.previous_character_id:
+                server_state.initiative -= 1
+            server_state.previous_character_id = skip_character_id
+            server_state.next_initiative = server_state.initiative + 1
+        else:
+            if "next_initiative" not in server_state:
+                server_state.next_initiative = 0
+            if server_state.next_initiative == 2:
+                server_state.initiative = 1
+                server_state.next_initiative = 0
+            if server_state.next_initiative == 1:
+                server_state.initiative = 0
+                server_state.next_initiative = 0
+        if server_state.prev_ini != server_state.initiative_list['ID'].values.tolist():
+            server_state.initiative_list = server_state.initiative_list.reset_index(drop=True)
+            indicator_id = next((entry[0] for entry in server_state.prev_ini_list if entry[1] == '➤'), None)
+            if any('➤' in entry for entry in server_state.initiative_list['Indicator'].values.tolist()):
+                if indicator_id in server_state.initiative_list['ID'].values:
+                    for pos, row in server_state.initiative_list.iterrows():
+                        if row['ID'] == indicator_id:
+                            server_state.initiative = pos + 1
+        server_state.initiative_list["Indicator"] = ""
+        server_state.initiative = min(server_state.initiative, len(server_state.initiative_list) - 1)
+        server_state.initiative_list.at[server_state.initiative, "Indicator"] = "➤"
+        for Ident, Indicat in zip(server_state.initiative_list[['ID', 'Indicator']].values.tolist(), server_state.prev_ini_list):
+            if Ident[0] == Indicat[0] and Ident[1] == Indicat[1] == '➤':
+                server_state.initiative_list["Indicator"] = ""
+                if len(server_state.initiative_list) > 1:
+                    server_state.initiative += 1
+                else:
                     server_state.initiative = 0
-                    server_state.next_initiative = 0
-            if server_state.prev_ini != server_state.initiative_list['ID'].values.tolist():
-                server_state.initiative_list = server_state.initiative_list.reset_index(drop=True)
-                indicator_id = next((entry[0] for entry in server_state.prev_ini_list if entry[1] == '➤'), None)
-                if any('➤' in entry for entry in server_state.initiative_list['Indicator'].values.tolist()):
-                    if indicator_id in server_state.initiative_list['ID'].values:
-                        for pos, row in server_state.initiative_list.iterrows():
-                            if row['ID'] == indicator_id:
-                                server_state.initiative = pos + 1
-            server_state.initiative_list["Indicator"] = ""
-            server_state.initiative = min(server_state.initiative, len(server_state.initiative_list) - 1)
-            server_state.initiative_list.iloc[
-                server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
-            ] = '➤'
-            for Ident, Indicat in zip(server_state.initiative_list[['ID', 'Indicator']].values.tolist(), server_state.prev_ini_list):
-                if Ident[0] == Indicat[0] and Ident[1] == Indicat[1] == '➤':
-                    server_state.initiative_list["Indicator"] = ""
-                    if len(server_state.initiative_list) > 1:
-                        server_state.initiative += 1
-                    else:
-                        server_state.initiative = 0
-                    server_state.initiative_list.iloc[
-                    server_state.initiative, server_state.initiative_list.columns.get_loc("Indicator")
-                    ] = '➤'
-            server_state.initiative += 1
-            server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
-            server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
+                server_state.initiative_list.at[server_state.initiative, "Indicator"] = "➤"
+        server_state.initiative += 1
+        server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
+        server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
 if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Characters")
