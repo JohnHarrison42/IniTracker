@@ -45,6 +45,10 @@ if "pool" not in server_state:
     with server_state_lock["pool"]:
         server_state.pool = pd.DataFrame(initial_pool)
 
+if "dmpool" not in server_state:
+    with server_state_lock["dmpool"]:
+        server_state.dmpool = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints"])
+
 if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
@@ -99,9 +103,17 @@ def save_character_pool():
     with server_state_lock["pool"]:
         server_state.pool.to_csv("character_pool.csv", index=False)
         
+def save_creature_pool():
+    with server_state_lock["dmpool"]:
+        server_state.dmpool.to_csv("creature_pool.csv", index=False)
+        
 def load_character_pool():
     with server_state_lock["pool"]:
         server_state.pool = pd.read_csv("character_pool.csv")
+        
+def load_creature_pool():
+    with server_state_lock["dmpool"]:
+        server_state.dmpool = pd.read_csv("creature_pool.csv")
 
 def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
@@ -112,36 +124,60 @@ def add_to_initiative(character_id, initiative):
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
         server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
+        
+def add_creature_to_initiative(creature_id, initiative):
+    with server_state_lock["dmpool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
+        creature = server_state.dmpool.loc[server_state.dmpool["ID"] == creature_id].iloc[0]
+        server_state.dmpool = server_state.dmpool[server_state.dmpool["ID"] != creature_id]
+        new_row = {"ID": str(creature_id) + "C", "Name": creature["Name"], "Armor Class": creature["Armor Class"], "Hitpoints": creature["Hitpoints"], "Initiative": initiative, "Indicator": ""}
+        server_state.initiative_list = pd.concat(
+            [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
+        )
+        server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
 
 def remove_from_initiative(character_id):
-    with server_state_lock["pool"], server_state_lock["initiative_list"]:
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["dmpool"]:
         character = server_state.initiative_list.loc[server_state.initiative_list["ID"] == character_id].iloc[0]
         server_state.initiative_list = server_state.initiative_list[server_state.initiative_list["ID"] != character_id]
         for char in initial_pool:
             if char['ID'] == character_id:
                 character['Hitpoints'] = char['Hitpoints']
-        server_state.pool = pd.concat(
-            [server_state.pool, pd.DataFrame([{"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"]}])],
-            ignore_index=True,
-        )
+        if isinstance(character_id, str) and character_id[-1] == "C":
+            server_state.dmpool = pd.concat(
+                [server_state.dmpool, pd.DataFrame([{"ID": int(character_id[0:-1]), "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"]}])],
+                ignore_index=True,
+            )
+            server_state.dmpool.sort_values(by="ID", ascending=True, inplace=True)
+        else:
+            server_state.pool = pd.concat(
+                [server_state.pool, pd.DataFrame([{"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"]}])],
+                ignore_index=True,
+            )
+            server_state.pool.sort_values(by="ID", ascending=True, inplace=True)
         if server_state.initiative_list.empty:
             server_state.current_round = 1
 
-def add_new_character(new_name, new_ac, new_hp, new_initiative):
-    with server_state_lock["pool"]:
-        if server_state.pool.empty or server_state.pool["ID"].max() < server_state.initiative_list["ID"].max():
-            new_id = server_state.initiative_list["ID"].max() + 1
+def add_new_creature(new_name, new_ac, new_hp):
+    with server_state_lock["dmpool"], server_state_lock["pool"], server_state_lock["initiative_list"]:
+        id_initiative_list = server_state.initiative_list["ID"].str.removesuffix("C").astype(int)
+        if server_state.pool.empty and server_state.dmpool.empty or server_state.pool["ID"].max() < id_initiative_list.max() and server_state.dmpool["ID"].max() < id_initiative_list.max():
+            new_id = id_initiative_list.max() + 1
+        elif server_state.pool.empty or server_state.pool["ID"].max() < server_state.dmpool["ID"].max():
+            new_id = server_state.dmpool["ID"].max() + 1
         else:
             new_id = server_state.pool["ID"].max() + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
-        server_state.pool = pd.concat(
-            [server_state.pool, pd.DataFrame([new_row])], ignore_index=True
+        server_state.dmpool = pd.concat(
+            [server_state.dmpool, pd.DataFrame([new_row])], ignore_index=True
         )
-        add_to_initiative(new_id, new_initiative)
 
 def delete_character(character_id):
     with server_state_lock["pool"]:
         server_state.pool = server_state.pool.loc[server_state.pool["ID"] != character_id]
+
+def delete_creature(creature_id):
+    with server_state_lock["dmpool"]:
+        server_state.dmpool = server_state.dmpool.loc[server_state.dmpool["ID"] != creature_id]
 
 def ini_cycle():
     with server_state_lock["initiative"], server_state_lock["initiative_list"]:
@@ -226,8 +262,34 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
                 on_click=lambda character_id=row["ID"]: delete_character(character_id),
                 use_container_width=True,
             )
-        
-if st.session_state.view_mode or st.session_state.ini_mode or st.session_state.exp_mode:
+
+if not st.session_state.ini_mode and (st.session_state.view_mode or st.session_state.exp_mode or (st.session_state.view_mode and st.session_state.exp_mode)) or (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
+    st.header("Creatures")
+    for index, row in server_state.dmpool.iterrows():
+        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
+        with col1:
+            st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+        with col2:
+            initiative = st.slider(
+                f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}", label_visibility="collapsed"
+            )
+        with col3:
+            st.button(
+                f"Enter {row['Name']}",
+                key=f"enter_{row['ID']}",
+                on_click=add_creature_to_initiative,
+                args=(row["ID"], initiative),
+                use_container_width=True,
+            )
+        with col4:
+            st.button(
+                f"Delete {row['Name']}",
+                key=f"remove_pool_{index}_{row['ID']}",
+                on_click=lambda creature_id=row["ID"]: delete_creature(creature_id),
+                use_container_width=True,
+            )
+
+if st.session_state.ini_mode or st.session_state.exp_mode:
     st.header("Initiative - Round " + str(server_state.current_round))
     for index, row in server_state.initiative_list.iterrows():
         col1, col2, col3, col4, col5 = st.columns([0.15, 1.6, 0.4, 0.8, 0.8], gap="medium", vertical_alignment="center")
@@ -235,7 +297,7 @@ if st.session_state.view_mode or st.session_state.ini_mode or st.session_state.e
             st.markdown(f"<p style='font-size: 22px;'>{row['Indicator']}</p>", unsafe_allow_html=True)
         with col2:
             if row['Hitpoints'] > 0:
-                st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-size: 22px;'> {row['ID']} {row['Name']} (🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (🛡️{row['Armor Class']}, 💀)</p>", unsafe_allow_html=True)
 
@@ -275,8 +337,9 @@ def toggle_edit_hp():
             st.session_state[f"edit_hp_{row_id}"] = 0
             
 def reset():
-    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"]:
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"], server_state_lock["dmpool"]:
         server_state.pool = pd.DataFrame(initial_pool)
+        server_state.dmpool = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints"])
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
         server_state.initiative = 0
         server_state.ini_length = 0
@@ -291,28 +354,24 @@ def clear():
     st.session_state.new_name = st.session_state.new_character_name
     st.session_state.new_ac = st.session_state.new_character_ac
     st.session_state.new_hp = st.session_state.new_character_hp
-    st.session_state.new_initiative = st.session_state.new_character_initiative
     st.session_state.new_character_name = ""
     st.session_state.new_character_ac = 10
     st.session_state.new_character_hp = 10
-    st.session_state.new_character_initiative = 1
 
 if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_state.exp_mode)) or (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
-    st.header("Add Characters")
+    st.header("Add Creatures")
     st.text_input("Character Name", key="new_character_name")
     st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
     st.number_input("Hitpoints", min_value=0, value=10, key="new_character_hp")
-    st.slider("Initiative", 1, 30, key="new_character_initiative")
 
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
     with col1:
-        if st.button("Add Character", on_click=clear) and not st.session_state.button_pressed:
+        if st.button("Add Creature", on_click=clear) and not st.session_state.button_pressed:
             new_name = st.session_state.new_name
             new_ac = st.session_state.new_ac
             new_hp = st.session_state.new_hp
-            new_initiative = st.session_state.new_initiative
             st.session_state.button_pressed = True
-            add_new_character(new_name, new_ac, new_hp, new_initiative)
+            add_new_creature(new_name, new_ac, new_hp)
         st.session_state.button_pressed = False
     with col2:
         if st.button("Reset", on_click=clear):
@@ -330,6 +389,7 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
                 st.session_state.show_input = True
             elif st.session_state.verification == "Apfeltaschen":
                 save_character_pool()
+                save_creature_pool()
                 saved = st.success("Character pool saved successfully!")
                 time.sleep(3)
                 saved.empty()
@@ -341,11 +401,10 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
                 st.session_state.show_input = False
         if st.session_state.show_input:
             st.session_state.verification = st.text_input("Verification Code")
-
-            
     with col2:
         if st.button("Load Characters"):
             load_character_pool()
+            load_creature_pool()
             loaded = st.success("Character pool loaded successfully!")
             time.sleep(3)
             loaded.empty()
