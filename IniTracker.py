@@ -159,13 +159,14 @@ def remove_from_initiative(character_id):
 
 def add_new_creature(new_name, new_ac, new_hp):
     with server_state_lock["dmpool"], server_state_lock["pool"], server_state_lock["initiative_list"]:
-        id_initiative_list = server_state.initiative_list["ID"].str.removesuffix("C").astype(int)
-        if server_state.pool.empty and server_state.dmpool.empty or server_state.pool["ID"].max() < id_initiative_list.max() and server_state.dmpool["ID"].max() < id_initiative_list.max():
-            new_id = id_initiative_list.max() + 1
-        elif server_state.pool.empty or server_state.pool["ID"].max() < server_state.dmpool["ID"].max():
-            new_id = server_state.dmpool["ID"].max() + 1
-        else:
-            new_id = server_state.pool["ID"].max() + 1
+        id_initiative_list = server_state.initiative_list["ID"].apply(lambda x: int(x.rstrip("C")) if isinstance(x, str) else x)
+        id_pool = server_state.pool["ID"]
+        id_dmpool = server_state.dmpool["ID"]
+        try:
+            max_id = pd.concat([id for id in [id_initiative_list, id_pool, id_dmpool] if not id.empty], ignore_index=True).dropna().max()
+        except ValueError:
+            max_id = 0
+        new_id = max_id + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         server_state.dmpool = pd.concat(
             [server_state.dmpool, pd.DataFrame([new_row])], ignore_index=True
@@ -297,7 +298,7 @@ if st.session_state.ini_mode or st.session_state.exp_mode:
             st.markdown(f"<p style='font-size: 22px;'>{row['Indicator']}</p>", unsafe_allow_html=True)
         with col2:
             if row['Hitpoints'] > 0:
-                st.markdown(f"<p style='font-size: 22px;'> {row['ID']} {row['Name']} (🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+                st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
             else:
                 st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (🛡️{row['Armor Class']}, 💀)</p>", unsafe_allow_html=True)
 
