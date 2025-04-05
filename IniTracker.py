@@ -35,15 +35,15 @@ initial_pool = [
     {"ID": 1, "Name": "Zeno", "Armor Class": 16, "Hitpoints": 42},
     {"ID": 2, "Name": "Berinel", "Armor Class": 10, "Hitpoints": 10},
     {"ID": 3, "Name": "Ludovika", "Armor Class": 21, "Hitpoints": 67},
-    {"ID": 4, "Name": "Elris", "Armor Class": 10, "Hitpoints": 10},
+    {"ID": 4, "Name": "Elris", "Armor Class": 15, "Hitpoints": 51},
     {"ID": 5, "Name": "Francesco", "Armor Class": 20, "Hitpoints": 52},
     {"ID": 6, "Name": "Taja", "Armor Class": 13, "Hitpoints": 49},
-    {"ID": 7, "Name": "Niemand", "Armor Class": 10, "Hitpoints": 10},
+    {"ID": 7, "Name": "Niemand", "Armor Class": 14, "Hitpoints": 39},
     {"ID": 8, "Name": "Pixie", "Armor Class": 12, "Hitpoints": 11},
     {"ID": 9, "Name": "Tappsi", "Armor Class": 16, "Hitpoints": 60},
     {"ID": 10, "Name": "Lux", "Armor Class": 13, "Hitpoints": 37},
     {"ID": 11, "Name": "Garm", "Armor Class": 14, "Hitpoints": 54},
-    {"ID": 12, "Name": "Drachli", "Armor Class": 10, "Hitpoints": 10},
+    {"ID": 12, "Name": "Drach Lee", "Armor Class": 14, "Hitpoints": 52},
 ]
 
 if "pool" not in server_state:
