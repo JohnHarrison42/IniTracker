@@ -337,7 +337,7 @@ def toggle_edit_hp():
                     if current_hp < hp_change:
                         hp_change = 0
                     else:
-                        hp_change = current_hp - hp_change
+                        hp_change = current_hp + hp_change
                     server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
     for row_id in st.session_state.edit_hp_values:
             st.session_state[f"edit_hp_{row_id}"] = 0
