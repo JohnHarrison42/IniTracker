@@ -105,28 +105,28 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
     else:
         filtered_pool = server_state.pool
 
-def save_character_pool(pool: list[dict]):
+def save_character_pool():
     with server_state_lock["pool"]:
         df = server_state.pool
         conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df, worksheet="Character Pool")
+        conn.update(data=df, worksheet="Characters")
         
 def save_creature_pool():
     with server_state_lock["dmpool"]:
         df = server_state.dmpool
         conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df, worksheet="Creature Pool")
+        conn.update(data=df, worksheet="Creatures")
         
 def load_character_pool() -> list[dict]:
     with server_state_lock["pool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet="Character Pool")
+        df = conn.read(worksheet="Characters", ttl="0")
         server_state.pool = df
         
 def load_creature_pool():
     with server_state_lock["dmpool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet="Creature Pool")
+        df = conn.read(worksheet="Creatures", ttl="0")
         server_state.dmpool = df
 
 def add_to_initiative(character_id, initiative):
