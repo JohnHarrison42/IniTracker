@@ -121,12 +121,16 @@ def load_character_pool() -> list[dict]:
     with server_state_lock["pool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet="Characters", ttl="0")
+        df["Armor Class"] = df["Armor Class"].astype(int)
+        df["Hitpoints"] = df["Hitpoints"].astype(int)
         server_state.pool = df
         
 def load_creature_pool():
     with server_state_lock["dmpool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet="Creatures", ttl="0")
+        df["Armor Class"] = df["Armor Class"].astype(int)
+        df["Hitpoints"] = df["Hitpoints"].astype(int)
         server_state.dmpool = df
 
 def add_to_initiative(character_id, initiative):
