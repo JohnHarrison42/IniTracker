@@ -1,2 +1,3 @@
 streamlit-server-state
 streamlit==1.45.0
+streamlit_gsheets
