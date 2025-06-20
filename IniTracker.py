@@ -109,24 +109,24 @@ def save_character_pool(pool: list[dict]):
     with server_state_lock["pool"]:
         df = server_state.pool
         conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df, worksheet="1539644260")
+        conn.update(data=df, worksheet="Character Pool")
         
 def save_creature_pool():
     with server_state_lock["dmpool"]:
         df = server_state.dmpool
         conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df, worksheet="2143130331")
+        conn.update(data=df, worksheet="Creature Pool")
         
 def load_character_pool() -> list[dict]:
     with server_state_lock["pool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet="1539644260")
+        df = conn.read(worksheet="Character Pool")
         server_state.pool = df
         
 def load_creature_pool():
     with server_state_lock["dmpool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet="2143130331")
+        df = conn.read(worksheet="Creature Pool")
         server_state.dmpool = df
 
 def add_to_initiative(character_id, initiative):
