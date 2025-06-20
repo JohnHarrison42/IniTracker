@@ -2,6 +2,7 @@ import streamlit as st
 import pandas as pd
 from streamlit_server_state import server_state, server_state_lock
 import time
+from streamlit_gsheets import GSheetsConnection
 
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "DM"
@@ -104,21 +105,29 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
     else:
         filtered_pool = server_state.pool
 
-def save_character_pool():
+def save_character_pool(pool: list[dict]):
     with server_state_lock["pool"]:
-        server_state.pool.to_csv("character_pool.csv", index=False)
+        df = server_state.pool
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        conn.update(data=df, worksheet="1539644260")
         
 def save_creature_pool():
     with server_state_lock["dmpool"]:
-        server_state.dmpool.to_csv("creature_pool.csv", index=False)
+        df = server_state.dmpool
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        conn.update(data=df, worksheet="2143130331")
         
-def load_character_pool():
+def load_character_pool() -> list[dict]:
     with server_state_lock["pool"]:
-        server_state.pool = pd.read_csv("character_pool.csv")
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(worksheet="1539644260")
+        server_state.pool = df
         
 def load_creature_pool():
     with server_state_lock["dmpool"]:
-        server_state.dmpool = pd.read_csv("creature_pool.csv")
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df = conn.read(worksheet="2143130331")
+        server_state.dmpool = df
 
 def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
