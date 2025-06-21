@@ -190,10 +190,6 @@ def add_new_creature(new_name, new_ac, new_hp):
             [server_state.dmpool, pd.DataFrame([new_row])], ignore_index=True
         )
 
-def delete_character(character_id):
-    with server_state_lock["pool"]:
-        server_state.pool = server_state.pool.loc[server_state.pool["ID"] != character_id]
-
 def delete_creature(creature_id):
     with server_state_lock["dmpool"]:
         server_state.dmpool = server_state.dmpool.loc[server_state.dmpool["ID"] != creature_id]
@@ -259,7 +255,7 @@ def ini_cycle():
 if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Characters")
     for index, row in filtered_pool.iterrows():
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
+        col1, col2, col3 = st.columns([0.5, 1, 1], gap="medium", vertical_alignment="center")
         with col1:
             st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
         with col2:
@@ -272,13 +268,6 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
                 key=f"enter_{row['ID']}",
                 on_click=add_to_initiative,
                 args=(row["ID"], initiative),
-                use_container_width=True,
-            )
-        with col4:
-            st.button(
-                f"Delete {row['Name']}",
-                key=f"remove_pool_{index}_{row['ID']}",
-                on_click=lambda character_id=row["ID"]: delete_character(character_id),
                 use_container_width=True,
             )
 
@@ -357,8 +346,8 @@ def toggle_edit_hp():
             
 def reset():
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"], server_state_lock["dmpool"]:
-        server_state.pool = pd.DataFrame(initial_pool)
-        server_state.dmpool = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints"])
+        load_character_pool()
+        load_creature_pool()
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
         server_state.initiative = 0
         server_state.ini_length = 0
@@ -404,20 +393,25 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
     with col1:
         if st.button("Save Characters"):
-            if not st.session_state.show_input:
-                st.session_state.show_input = True
-            elif st.session_state.verification == "Apfeltaschen":
-                save_character_pool()
-                save_creature_pool()
-                saved = st.success("Character pool saved successfully!")
-                time.sleep(3)
-                saved.empty()
-                st.session_state.show_input = False
-            elif st.session_state.verification != "Apfeltaschen":
-                error = st.error("Incorrect verification code. Please try again.")
+            if not server_state.initiative_list.empty:
+                error = st.error("Please clear the initiative list before saving.")
                 time.sleep(3)
                 error.empty()
-                st.session_state.show_input = False
+            else:
+                if not st.session_state.show_input:
+                    st.session_state.show_input = True
+                elif st.session_state.verification == "Apfeltaschen":
+                    save_character_pool()
+                    save_creature_pool()
+                    saved = st.success("Character pool saved successfully!")
+                    time.sleep(3)
+                    saved.empty()
+                    st.session_state.show_input = False
+                elif st.session_state.verification != "Apfeltaschen":
+                    error = st.error("Incorrect verification code. Please try again.")
+                    time.sleep(3)
+                    error.empty()
+                    st.session_state.show_input = False
         if st.session_state.show_input:
             st.session_state.verification = st.text_input("Verification Code")
     with col2:
