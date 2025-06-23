@@ -32,20 +32,16 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-initial_pool = [
-    {"ID": 1, "Name": "Zeno", "Armor Class": 16, "Hitpoints": 42},
-    {"ID": 2, "Name": "Berinel", "Armor Class": 10, "Hitpoints": 10},
-    {"ID": 3, "Name": "Ludovika", "Armor Class": 21, "Hitpoints": 67},
-    {"ID": 4, "Name": "Elris", "Armor Class": 15, "Hitpoints": 51},
-    {"ID": 5, "Name": "Francesco", "Armor Class": 20, "Hitpoints": 52},
-    {"ID": 6, "Name": "Taja", "Armor Class": 13, "Hitpoints": 49},
-    {"ID": 7, "Name": "Niemand", "Armor Class": 14, "Hitpoints": 39},
-    {"ID": 8, "Name": "Pixie", "Armor Class": 12, "Hitpoints": 11},
-    {"ID": 9, "Name": "Tappsi", "Armor Class": 16, "Hitpoints": 60},
-    {"ID": 10, "Name": "Lux", "Armor Class": 13, "Hitpoints": 37},
-    {"ID": 11, "Name": "Garm", "Armor Class": 14, "Hitpoints": 54},
-    {"ID": 12, "Name": "Drach Lee", "Armor Class": 14, "Hitpoints": 52},
-]
+@st.cache_data
+def initialize_pool():
+    conn = st.connection("gsheets", type=GSheetsConnection)
+    df = conn.read(worksheet="Characters", ttl="0")
+    df["Armor Class"] = df["Armor Class"].astype(int)
+    df["Hitpoints"] = df["Hitpoints"].astype(int)
+    df["ID"] = df["ID"].astype(int)
+    return df.to_dict('records')
+
+initial_pool = initialize_pool()
 
 if "pool" not in server_state:
     with server_state_lock["pool"]:
@@ -123,6 +119,7 @@ def load_character_pool() -> list[dict]:
         df = conn.read(worksheet="Characters", ttl="0")
         df["Armor Class"] = df["Armor Class"].astype(int)
         df["Hitpoints"] = df["Hitpoints"].astype(int)
+        df["ID"] = df["ID"].astype(int)
         server_state.pool = df
         
 def load_creature_pool():
@@ -131,6 +128,7 @@ def load_creature_pool():
         df = conn.read(worksheet="Creatures", ttl="0")
         df["Armor Class"] = df["Armor Class"].astype(int)
         df["Hitpoints"] = df["Hitpoints"].astype(int)
+        df["ID"] = df["ID"].astype(int)
         server_state.dmpool = df
 
 def add_to_initiative(character_id, initiative):
@@ -346,6 +344,8 @@ def toggle_edit_hp():
             
 def reset():
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"], server_state_lock["dmpool"]:
+        initialize_pool.clear()
+        initialize_pool()
         load_character_pool()
         load_creature_pool()
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
@@ -394,7 +394,7 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
     with col1:
         if st.button("Save Characters"):
             if not server_state.initiative_list.empty:
-                error = st.error("Please clear the initiative list before saving.")
+                error = st.error("Clear the initiative list before saving.")
                 time.sleep(3)
                 error.empty()
             else:
@@ -403,7 +403,7 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
                 elif st.session_state.verification == "Apfeltaschen":
                     save_character_pool()
                     save_creature_pool()
-                    saved = st.success("Character pool saved successfully!")
+                    saved = st.success("Characters saved successfully!")
                     time.sleep(3)
                     saved.empty()
                     st.session_state.show_input = False
@@ -416,11 +416,18 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
             st.session_state.verification = st.text_input("Verification Code")
     with col2:
         if st.button("Load Characters"):
-            load_character_pool()
-            load_creature_pool()
-            loaded = st.success("Character pool loaded successfully!")
-            time.sleep(3)
-            loaded.empty()
+            if not server_state.initiative_list.empty:
+                error = st.error("Clear the initiative list before loading.")
+                time.sleep(3)
+                error.empty()
+            else:
+                initialize_pool.clear()
+                initialize_pool()
+                load_creature_pool()
+                load_character_pool()
+                loaded = st.success("Characters loaded successfully!")
+                time.sleep(3)
+                loaded.empty()
     with col3:
         st.button("Edit HP", key="toggle_edit_hp", on_click=toggle_edit_hp)
     
