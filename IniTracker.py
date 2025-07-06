@@ -51,6 +51,10 @@ if "dmpool" not in server_state:
     with server_state_lock["dmpool"]:
         server_state.dmpool = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints"])
 
+if "creature_temp_pool" not in server_state:
+    with server_state_lock["creature_temp_pool"]:
+        server_state.creature_temp_pool = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints"])
+
 if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
@@ -112,8 +116,10 @@ def save_creature_pool():
         df = server_state.dmpool
         conn = st.connection("gsheets", type=GSheetsConnection)
         conn.update(data=df, worksheet="Creatures")
+        server_state.creature_temp_pool = df.copy(deep=True).to_dict('records')
+
         
-def load_character_pool() -> list[dict]:
+def load_character_pool():
     with server_state_lock["pool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
         df = conn.read(worksheet="Characters", ttl="0")
@@ -130,6 +136,7 @@ def load_creature_pool():
         df["Hitpoints"] = df["Hitpoints"].astype(int)
         df["ID"] = df["ID"].astype(int)
         server_state.dmpool = df
+        server_state.creature_temp_pool = df.copy(deep=True).to_dict('records')
 
 def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
@@ -159,6 +166,10 @@ def remove_from_initiative(character_id):
             if char['ID'] == character_id:
                 character['Hitpoints'] = char['Hitpoints']
         if isinstance(character_id, str) and character_id[-1] == "C":
+            creature_id = int(character_id[:-1])
+            for char in server_state.creature_temp_pool:
+                if char['ID'] == creature_id:
+                    character['Hitpoints'] = char['Hitpoints']
             server_state.dmpool = pd.concat(
                 [server_state.dmpool, pd.DataFrame([{"ID": int(character_id[0:-1]), "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"]}])],
                 ignore_index=True,
@@ -334,16 +345,16 @@ def toggle_edit_hp():
                 hitpoints = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
                 if not hitpoints.empty:
                     current_hp = hitpoints.iloc[0]
-                    if current_hp < hp_change:
+                    if hp_change < 0 and current_hp <= abs(hp_change):
                         hp_change = 0
                     else:
                         hp_change = current_hp + hp_change
                     server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
     for row_id in st.session_state.edit_hp_values:
-            st.session_state[f"edit_hp_{row_id}"] = 0
+        st.session_state[f"edit_hp_{row_id}"] = 0
             
 def reset():
-    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["Initiative"], server_state_lock["dmpool"]:
+    with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"], server_state_lock["dmpool"]:
         initialize_pool.clear()
         initialize_pool()
         load_character_pool()
