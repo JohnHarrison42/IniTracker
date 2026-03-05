@@ -357,8 +357,11 @@ def reset():
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"], server_state_lock["dmpool"]:
         initialize_pool.clear()
         initialize_pool()
+        time.sleep(0.5)
         load_character_pool()
+        time.sleep(0.5)
         load_creature_pool()
+        time.sleep(0.5)
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
         server_state.initiative = 0
         server_state.ini_length = 0
@@ -434,8 +437,11 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
             else:
                 initialize_pool.clear()
                 initialize_pool()
+                time.sleep(0.5)
                 load_creature_pool()
+                time.sleep(0.5)
                 load_character_pool()
+                time.sleep(0.5)
                 loaded = st.success("Characters loaded successfully!")
                 time.sleep(3)
                 loaded.empty()
