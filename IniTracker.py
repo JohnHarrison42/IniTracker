@@ -3,6 +3,8 @@ import pandas as pd
 from streamlit_server_state import server_state, server_state_lock
 import time
 from streamlit_gsheets import GSheetsConnection
+import threading
+from streamlit.runtime.scriptrunner import add_script_run_ctx
 
 if "view_mode" not in st.session_state:
     st.session_state.view_mode = "DM"
@@ -53,7 +55,7 @@ if "dmpool" not in server_state:
 
 if "creature_temp_pool" not in server_state:
     with server_state_lock["creature_temp_pool"]:
-        server_state.creature_temp_pool = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints"])
+        server_state.creature_temp_pool = []
 
 if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
@@ -93,6 +95,28 @@ if "show_input" not in st.session_state:
 if "verification" not in st.session_state:
     st.session_state.verification = ""
 
+if "autosave_started" not in server_state:
+    with server_state_lock["autosave_started"]:
+        server_state.autosave_started = True
+        def periodic_save():
+            try:
+                if not server_state.initiative_list.empty:
+                    conn = st.connection("gsheets", type=GSheetsConnection)
+                    with server_state_lock["initiative_list"]:
+                        ini_df = server_state.initiative_list.copy()
+                    conn.update(data=ini_df, worksheet="Initiative")
+            except Exception:
+                return 
+            finally:
+                timer = threading.Timer(60.0, periodic_save)
+                timer.daemon = True
+                add_script_run_ctx(timer)
+                timer.start()
+        timer = threading.Timer(60.0, periodic_save)
+        timer.daemon = True
+        add_script_run_ctx(timer)
+        timer.start()
+
 if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
     st.header("Character Selection")
     col1, col2 = st.columns([0.25, 0.5])
@@ -118,7 +142,6 @@ def save_creature_pool():
         conn.update(data=df, worksheet="Creatures")
         server_state.creature_temp_pool = df.copy(deep=True).to_dict('records')
 
-        
 def load_character_pool():
     with server_state_lock["pool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
@@ -137,6 +160,33 @@ def load_creature_pool():
         df["ID"] = df["ID"].astype(int)
         server_state.dmpool = df
         server_state.creature_temp_pool = df.copy(deep=True).to_dict('records')
+        
+def reset_initiative():
+    with server_state_lock["initiative_list"]:
+        ini_reset = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        conn.update(data=ini_reset, worksheet="Initiative")
+        
+def load_initiative():
+    with server_state_lock["initiative_list"], server_state_lock["pool"], server_state_lock["dmpool"]:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        try:
+            loaded_ini = conn.read(worksheet="Initiative", ttl="0")
+        except Exception:
+            return
+        loaded_ini["Indicator"] = loaded_ini["Indicator"].fillna("")
+        loaded_ini["Armor Class"] = loaded_ini["Armor Class"].astype(int)
+        loaded_ini["Hitpoints"] = loaded_ini["Hitpoints"].astype(int)
+        loaded_ini["Initiative"] = loaded_ini["Initiative"].astype(int)
+        for index, row in loaded_ini.iterrows():
+            char_id = row["ID"]
+            if isinstance(char_id, str) and char_id[-1] == "C":
+                creature_id = int(char_id[:-1])
+                server_state.dmpool = server_state.dmpool[server_state.dmpool["ID"] != creature_id]
+            else:
+                character_id = int(char_id)
+                server_state.pool = server_state.pool[server_state.pool["ID"] != character_id]
+        server_state.initiative_list = loaded_ini
 
 def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
@@ -152,7 +202,7 @@ def add_creature_to_initiative(creature_id, initiative):
     with server_state_lock["dmpool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         creature = server_state.dmpool.loc[server_state.dmpool["ID"] == creature_id].iloc[0]
         server_state.dmpool = server_state.dmpool[server_state.dmpool["ID"] != creature_id]
-        new_row = {"ID": str(creature_id) + "C", "Name": creature["Name"], "Armor Class": creature["Armor Class"], "Hitpoints": creature["Hitpoints"], "Initiative": initiative, "Indicator": ""}
+        new_row = {"ID": str(int(creature_id)) + "C", "Name": creature["Name"], "Armor Class": creature["Armor Class"], "Hitpoints": creature["Hitpoints"], "Initiative": initiative, "Indicator": ""}
         server_state.initiative_list = pd.concat(
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
@@ -193,11 +243,12 @@ def add_new_creature(new_name, new_ac, new_hp):
             max_id = pd.concat([id for id in [id_initiative_list, id_pool, id_dmpool] if not id.empty], ignore_index=True).dropna().max()
         except ValueError:
             max_id = 0
-        new_id = max_id + 1
+        new_id = int(max_id) + 1
         new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         server_state.dmpool = pd.concat(
             [server_state.dmpool, pd.DataFrame([new_row])], ignore_index=True
         )
+        server_state.creature_temp_pool.append(new_row)
 
 def delete_creature(creature_id):
     with server_state_lock["dmpool"]:
@@ -362,6 +413,8 @@ def reset():
         time.sleep(0.5)
         load_creature_pool()
         time.sleep(0.5)
+        reset_initiative()
+        time.sleep(0.5)
         server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
         server_state.initiative = 0
         server_state.ini_length = 0
@@ -401,7 +454,10 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
     with col3:
         if st.button("Initiative") and not st.session_state.ini_pressed:
             st.session_state.ini_pressed = True
-            ini_cycle()
+            if server_state.initiative_list.empty:
+                load_initiative()
+            else:
+                ini_cycle()
         st.session_state.ini_pressed = False
 
     col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
@@ -442,6 +498,8 @@ if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_
                 time.sleep(0.5)
                 load_character_pool()
                 time.sleep(0.5)
+                load_initiative()
+                time.sleep(0.5)
                 loaded = st.success("Characters loaded successfully!")
                 time.sleep(3)
                 loaded.empty()
@@ -453,7 +511,10 @@ if st.session_state.ini_mode and not (st.session_state.ini_mode and st.session_s
     with col1:
         if st.button("Initiative") and not st.session_state.ini_pressed:
             st.session_state.ini_pressed = True
-            ini_cycle()
+            if server_state.initiative_list.empty:
+                load_initiative()
+            else:
+                ini_cycle()
         st.session_state.ini_pressed = False
     with col2:
         st.button("Edit HP", key="toggle_edit_hp", on_click=toggle_edit_hp)
