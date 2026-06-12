@@ -105,14 +105,15 @@ if "autosave_started" not in server_state:
                     with server_state_lock["initiative_list"]:
                         ini_df = server_state.initiative_list.copy()
                     conn.update(data=ini_df, worksheet="Initiative")
+                    print("Success")
             except Exception:
                 return 
             finally:
-                timer = threading.Timer(60.0, periodic_save)
+                timer = threading.Timer(5.0, periodic_save)
                 timer.daemon = True
                 add_script_run_ctx(timer)
                 timer.start()
-        timer = threading.Timer(60.0, periodic_save)
+        timer = threading.Timer(5.0, periodic_save)
         timer.daemon = True
         add_script_run_ctx(timer)
         timer.start()
