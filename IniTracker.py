@@ -116,7 +116,7 @@ if not st.session_state.ini_mode and not st.session_state.view_mode and not st.s
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
         character_names = ["All"] + list(server_state.pool["Name"])
-        selected_character = st.selectbox("Choose your character:", character_names, key="character_select")
+        selected_character = st.selectbox("Choose your character:", character_names, key="character_select", filter_mode=None)
     
     if selected_character != "All":
         filtered_pool = server_state.pool[server_state.pool["Name"] == selected_character]
@@ -128,7 +128,7 @@ if not st.session_state.ini_mode and st.session_state.view_mode and not st.sessi
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
         creature_names = ["All"] + list(server_state.dmpool["Name"])
-        selected_creature = st.selectbox("Choose your creature:", creature_names, key="creature_select")
+        selected_creature = st.selectbox("Choose your creature:", creature_names, key="creature_select", filter_mode=None)
     
     if selected_creature != "All":
         filtered_dmpool = server_state.dmpool[server_state.dmpool["Name"] == selected_creature]
