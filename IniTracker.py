@@ -16,19 +16,30 @@ if "view_mode" not in st.session_state:
 
 if "ini_mode" not in st.session_state:
     st.session_state.ini_mode = False
+    
+if "edit_mode" not in st.session_state:
+    st.session_state.edit_mode = False
 
 with st.sidebar:
     st.title("⚙️ Modes")
-    mode = st.radio("Select Mode", ["Player Mode", "DM Mode", "Initiative Mode"], key="mode_radio")
+    mode = st.radio("Select Mode", ["Player Mode", "DM Mode", "Initiative Mode", "Edit Mode"], key="mode_radio")
     if mode == "Player Mode":
+        st.session_state.edit_mode = False
         st.session_state.view_mode = False
         st.session_state.ini_mode = False
     elif mode == "DM Mode":
+        st.session_state.edit_mode = False
         st.session_state.view_mode = True
         st.session_state.ini_mode = False
     elif mode == "Initiative Mode":
+        st.session_state.edit_mode = False
         st.session_state.view_mode = False
         st.session_state.ini_mode = True
+    elif mode == "Edit Mode":
+        st.session_state.edit_mode = True
+        st.session_state.view_mode = False
+        st.session_state.ini_mode = False
+    
     #mode = st.toggle("DM Mode", key="view_mode")
     #ini_mode = st.toggle("Initiative Mode", key="ini_mode")
     
@@ -100,7 +111,7 @@ if "show_input" not in st.session_state:
 if "verification" not in st.session_state:
     st.session_state.verification = ""
 
-if not st.session_state.ini_mode and not st.session_state.view_mode:
+if not st.session_state.ini_mode and not st.session_state.view_mode and not st.session_state.edit_mode:
     st.header("Character Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
@@ -112,7 +123,7 @@ if not st.session_state.ini_mode and not st.session_state.view_mode:
     else:
         filtered_pool = server_state.pool
         
-if not st.session_state.ini_mode and st.session_state.view_mode:
+if not st.session_state.ini_mode and st.session_state.view_mode and not st.session_state.edit_mode:
     st.header("Creature Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
@@ -408,7 +419,7 @@ autosave()
 # UI - VIEW MODES
 #------------------------------
 
-if not st.session_state.ini_mode and not st.session_state.view_mode:
+if not st.session_state.ini_mode and not st.session_state.view_mode and not st.session_state.edit_mode:
     st.header("Characters")
     for index, row in filtered_pool.iterrows():
         with st.container(horizontal=True, border=True):
@@ -425,7 +436,7 @@ if not st.session_state.ini_mode and not st.session_state.view_mode:
                     width="stretch",
                 )
 
-if not st.session_state.ini_mode and st.session_state.view_mode:
+if not st.session_state.ini_mode and st.session_state.view_mode and not st.session_state.edit_mode:
     st.header("Creatures")
     if server_state.dmpool.empty:
         st.info("No creatures currently in the pool. Add creatures below.")
@@ -452,7 +463,7 @@ if not st.session_state.ini_mode and st.session_state.view_mode:
                     width="stretch",
                 )
 
-if st.session_state.ini_mode:
+if st.session_state.ini_mode and not st.session_state.edit_mode:
     st.header("Initiative - Round " + str(server_state.current_round))
     if server_state.initiative_list.empty:
         st.info("No combatants currently in initiative. Add characters or creatures.")
@@ -489,6 +500,21 @@ if st.session_state.ini_mode:
                 if action == "Edit Ini":
                     edit_initiative(row["ID"])
 
+if st.session_state.edit_mode:
+    c1, c2 = st.columns(2)
+    with c1:
+        st.header("**Edit Characters**")
+        edited_pool = st.data_editor(server_state.pool, num_rows="dynamic", width="stretch", key="char_pool_editor", column_config={col: st.column_config.Column(alignment="center") for col in server_state.pool.columns})
+        if st.button("Save Character Roster Changes"):
+            with server_state_lock["pool"]:
+                server_state.pool = edited_pool
+    with c2:
+        st.header("**Edit Creatures**")
+        edited_dmpool = st.data_editor(server_state.dmpool, num_rows="dynamic", width="stretch", key="creature_pool_editor", column_config={col: st.column_config.Column(alignment="center") for col in server_state.pool.columns})
+        if st.button("Save Creature Pool Changes"):
+            with server_state_lock["dmpool"]:
+                server_state.dmpool = edited_dmpool
+
 #------------------------------
 # FUNCTION - RESET
 #------------------------------
@@ -519,14 +545,14 @@ def reset():
 #------------------------------
 
 with st.bottom:
-    if st.session_state.ini_mode:
+    if st.session_state.ini_mode and not st.session_state.view_mode:
         ini_menu = st.container(horizontal=True, horizontal_alignment="center")
         if ini_menu.button("Initiative"):
             if server_state.initiative_list.empty:
                 load_initiative()
             else:
                 ini_cycle()
-    if not st.session_state.ini_mode and st.session_state.view_mode:
+    if not st.session_state.ini_mode and st.session_state.view_mode and not st.session_state.edit_mode:
         dm_menu = st.container(horizontal=True, horizontal_alignment="center")
         if dm_menu.button("Add"):
             add_dialog()
