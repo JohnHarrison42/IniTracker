@@ -1,38 +1,46 @@
-import streamlit as st
-import pandas as pd
-from streamlit_server_state import server_state, server_state_lock
 import time
+
+import pandas as pd
+import streamlit as st
 from streamlit_gsheets import GSheetsConnection
-import threading
-from streamlit.runtime.scriptrunner import add_script_run_ctx
+from streamlit_server_state import server_state, server_state_lock
+
+#------------------------------
+# CONTROLS AND SETUP
+#------------------------------
+
+st.set_page_config(page_title="D&D Initiative Tracker", layout="wide", initial_sidebar_state="collapsed")
 
 if "view_mode" not in st.session_state:
-    st.session_state.view_mode = "DM"
-   
-mode = st.toggle("DM Mode")
-st.session_state.view_mode = mode
+    st.session_state.view_mode = False
 
-ini_mode = st.toggle("Initiative Mode")
-st.session_state.ini_mode = ini_mode
+if "ini_mode" not in st.session_state:
+    st.session_state.ini_mode = False
 
-exp_mode = st.toggle("Expert Mode")
-st.session_state.exp_mode = exp_mode
+with st.sidebar:
+    st.title("⚙️ Modes")
+    mode = st.radio("Select Mode", ["Player Mode", "DM Mode", "Initiative Mode"], key="mode_radio")
+    if mode == "Player Mode":
+        st.session_state.view_mode = False
+        st.session_state.ini_mode = False
+    elif mode == "DM Mode":
+        st.session_state.view_mode = True
+        st.session_state.ini_mode = False
+    elif mode == "Initiative Mode":
+        st.session_state.view_mode = False
+        st.session_state.ini_mode = True
+    #mode = st.toggle("DM Mode", key="view_mode")
+    #ini_mode = st.toggle("Initiative Mode", key="ini_mode")
+    
+#------------------------------
+# INITIALIZATION
+#------------------------------
 
-st.markdown(
-    """
-    <style>
-    /* General button styling */
-    div.stButton > button {
-        font-size: 18px;
-        padding: 10px 20px;
-        border-radius: 8px;
-        min-width: 150px;
-        min-height: 50px;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
+DnD_Conditions = [
+    "Blinded", "Charmed", "Deafened", "Frightened", "Grappled", 
+    "Incapacitated", "Invisible", "Paralyzed", "Petrified", 
+    "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Concentrating"
+]
 
 @st.cache_data
 def initialize_pool():
@@ -75,10 +83,7 @@ if "prev_ini" not in server_state:
 if "prev_ini_list" not in server_state:
     with server_state_lock["prev_ini_list"]:
         server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
-        
-if "button_pressed" not in st.session_state:
-    st.session_state.button_pressed = False
-    
+
 if "ini_pressed" not in st.session_state:
     st.session_state.ini_pressed = False
     
@@ -95,29 +100,7 @@ if "show_input" not in st.session_state:
 if "verification" not in st.session_state:
     st.session_state.verification = ""
 
-if "autosave_started" not in server_state:
-    with server_state_lock["autosave_started"]:
-        server_state.autosave_started = True
-        def periodic_save():
-            try:
-                if not server_state.initiative_list.empty:
-                    conn = st.connection("gsheets", type=GSheetsConnection)
-                    with server_state_lock["initiative_list"]:
-                        ini_df = server_state.initiative_list.copy()
-                    conn.update(data=ini_df, worksheet="Initiative")
-            except Exception as e:
-                print(f"Autosave failed: {e}")
-            finally:
-                timer = threading.Timer(60.0, periodic_save)
-                timer.daemon = True
-                add_script_run_ctx(timer)
-                timer.start()
-        timer = threading.Timer(60.0, periodic_save)
-        timer.daemon = True
-        add_script_run_ctx(timer)
-        timer.start()
-
-if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
+if not st.session_state.ini_mode and not st.session_state.view_mode:
     st.header("Character Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
@@ -129,8 +112,8 @@ if not st.session_state.ini_mode and not st.session_state.view_mode or (st.sessi
     else:
         filtered_pool = server_state.pool
         
-if not st.session_state.ini_mode and (st.session_state.view_mode or st.session_state.exp_mode or (st.session_state.view_mode and st.session_state.exp_mode)) or (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
-    st.header("Character Selection")
+if not st.session_state.ini_mode and st.session_state.view_mode:
+    st.header("Creature Selection")
     col1, col2 = st.columns([0.25, 0.5])
     with col1:
         creature_names = ["All"] + list(server_state.dmpool["Name"])
@@ -141,38 +124,91 @@ if not st.session_state.ini_mode and (st.session_state.view_mode or st.session_s
     else:
         filtered_dmpool = server_state.dmpool
 
-def save_character_pool():
-    with server_state_lock["pool"]:
-        df = server_state.pool
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df, worksheet="Characters")
+if "autosave_timer" not in server_state:
+    with server_state_lock["autosave_timer"]:
+        server_state.autosave_timer = None
         
-def save_creature_pool():
-    with server_state_lock["dmpool"]:
-        df = server_state.dmpool
-        conn = st.connection("gsheets", type=GSheetsConnection)
-        conn.update(data=df, worksheet="Creatures")
-        server_state.creature_temp_pool = df.copy(deep=True).to_dict('records')
+if "delete_mode" not in st.session_state:
+    st.session_state.delete_mode = False
 
-def load_character_pool():
-    with server_state_lock["pool"]:
+#------------------------------
+# FUNCTIONS
+#------------------------------
+
+@st.fragment(run_every=60)
+def autosave():
+    with server_state_lock["autosave_timer"]:
+        if server_state.autosave_timer is None:
+            return
+        if time.time() - server_state.autosave_timer < 60:
+            return
+        with server_state_lock["initiative_list"]:
+            if server_state.initiative_list.empty:
+                return
+            ini_df = server_state.initiative_list.copy()
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet="Characters", ttl="0")
-        df["Armor Class"] = df["Armor Class"].astype(int)
-        df["Hitpoints"] = df["Hitpoints"].astype(int)
-        df["ID"] = df["ID"].astype(int)
-        server_state.pool = df
-        
-def load_creature_pool():
+        conn.update(data=ini_df, worksheet="Initiative")
+        server_state.autosave_timer = time.time()
+
+def normalize_dmpool():
     with server_state_lock["dmpool"]:
+        server_state.dmpool.sort_values(by="Name", inplace=True, key=lambda x: x.str.lower())
+        server_state.dmpool.reset_index(drop=True, inplace=True)
+        dmpool_first_id = server_state.pool["ID"].max() + 1
+        server_state.dmpool["ID"] = range(dmpool_first_id, dmpool_first_id + len(server_state.dmpool))
+        server_state.creature_temp_pool = server_state.dmpool.copy(deep=True).to_dict('records')
+
+def save_pools():
+    with server_state_lock["dmpool"] and server_state_lock["pool"]:
+        normalize_dmpool()
+        df_pool = server_state.pool
+        df_dmpool = server_state.dmpool
         conn = st.connection("gsheets", type=GSheetsConnection)
-        df = conn.read(worksheet="Creatures", ttl="0")
-        df["Armor Class"] = df["Armor Class"].astype(int)
-        df["Hitpoints"] = df["Hitpoints"].astype(int)
-        df["ID"] = df["ID"].astype(int)
-        server_state.dmpool = df
-        server_state.creature_temp_pool = df.copy(deep=True).to_dict('records')
+        conn.update(data=df_pool, worksheet="Characters")
+        time.sleep(0.5)
+        conn.update(data=df_dmpool, worksheet="Creatures")
+    
+@st.dialog("Save Characters", icon="💾", on_dismiss="rerun")
+def save_pools_dialog():
+    st.write("Please enter the Password")
+    password = st.text_input("Password")
+    if st.button("Save"):
+        if not server_state.initiative_list.empty:
+            st.toast("Clear the initiative list before saving.", icon="⚠️", duration=3)
+            st.rerun()
+        else:
+            if password == "Apfeltaschen":
+                st.toast("Characters saved successfully!", icon="✅", duration=3)
+                save_pools()
+                st.rerun()
+            else:
+                st.toast("Incorrect verification code. Please try again.", icon="❌", duration=3)
+                st.rerun()
+
+def load_pools():
+    with server_state_lock["pool"] and server_state_lock["dmpool"]:
+        conn = st.connection("gsheets", type=GSheetsConnection)
+        df_pool = conn.read(worksheet="Characters", ttl="0")
+        df_dmpool = conn.read(worksheet="Creatures", ttl="0")
+        df_pool["Armor Class"] = df_pool["Armor Class"].astype(int)
+        df_pool["Hitpoints"] = df_pool["Hitpoints"].astype(int)
+        df_pool["ID"] = df_pool["ID"].astype(int)
+        df_dmpool["Armor Class"] = df_dmpool["Armor Class"].astype(int)
+        df_dmpool["Hitpoints"] = df_dmpool["Hitpoints"].astype(int)
+        df_dmpool["ID"] = df_dmpool["ID"].astype(int)
+        server_state.pool = df_pool
+        server_state.dmpool = df_dmpool
+        normalize_dmpool()
         
+def load_pools_dialog():
+    if not server_state.initiative_list.empty:
+        st.toast("Clear the initiative list before loading.", icon="⚠️", duration=3)
+    else:
+        st.toast("Characters loaded successfully!", icon="✅", duration=3)
+        initialize_pool.clear()
+        initialize_pool()
+        load_pools()
+
 def reset_initiative():
     with server_state_lock["initiative_list"]:
         ini_reset = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
@@ -182,10 +218,7 @@ def reset_initiative():
 def load_initiative():
     with server_state_lock["initiative_list"], server_state_lock["pool"], server_state_lock["dmpool"]:
         conn = st.connection("gsheets", type=GSheetsConnection)
-        try:
-            loaded_ini = conn.read(worksheet="Initiative", ttl="0")
-        except Exception:
-            return
+        loaded_ini = conn.read(worksheet="Initiative", ttl="0")
         loaded_ini["Indicator"] = loaded_ini["Indicator"].fillna("")
         loaded_ini["Armor Class"] = loaded_ini["Armor Class"].astype(int)
         loaded_ini["Hitpoints"] = loaded_ini["Hitpoints"].astype(int)
@@ -209,7 +242,9 @@ def add_to_initiative(character_id, initiative):
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
         server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
-        
+    with server_state_lock["autosave_timer"]:
+        server_state.autosave_timer = time.time()
+
 def add_creature_to_initiative(creature_id, initiative):
     with server_state_lock["dmpool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         creature = server_state.dmpool.loc[server_state.dmpool["ID"] == creature_id].iloc[0]
@@ -219,6 +254,8 @@ def add_creature_to_initiative(creature_id, initiative):
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
         server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
+        with server_state_lock["autosave_timer"]:
+            server_state.autosave_timer = time.time()
 
 def remove_from_initiative(character_id):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["dmpool"]:
@@ -256,7 +293,6 @@ def add_new_creature(new_name, new_ac, new_hp, new_amount):
         except ValueError:
             max_id = 0
         new_id = int(max_id) + 1
-        #new_row = {"ID": new_id, "Name": new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
         for i in range(new_amount):
             new_row = {"ID": new_id + i, "Name": f"{new_name} {i+1}" if new_amount > 1 else new_name, "Armor Class": new_ac, "Hitpoints": new_hp}
             server_state.dmpool = pd.concat(
@@ -264,10 +300,49 @@ def add_new_creature(new_name, new_ac, new_hp, new_amount):
             )
         server_state.dmpool.sort_values(by="Name", inplace=True, key=lambda x: x.str.lower())
         server_state.creature_temp_pool.append(new_row)
+        
+@st.dialog("Add Creature", icon="➕", on_dismiss="rerun")
+def add_dialog():
+    with st.form("add_creature_form"):
+        name = st.text_input("Creature Name")
+        ac = st.number_input("Armor Class", min_value=1, max_value=30, value=10)
+        hp = st.number_input("Hitpoints", min_value=0, value=10)
+        amount = st.number_input("Amount", min_value=1, value=1)
+        submitted = st.form_submit_button("Add")
+    if submitted:
+        add_new_creature(name, ac, hp, amount)
+        st.rerun()
 
 def delete_creature(creature_id):
     with server_state_lock["dmpool"]:
         server_state.dmpool = server_state.dmpool.loc[server_state.dmpool["ID"] != creature_id]
+
+def toggle_edit_hp():
+    with server_state_lock["initiative_list"]:
+        for row_id, hp_change in st.session_state.edit_hp_values.items():
+            if row_id is not None and hp_change is not None:
+                hitpoints = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
+                if not hitpoints.empty:
+                    current_hp = hitpoints.iloc[0]
+                    if hp_change < 0 and current_hp <= abs(hp_change):
+                        hp_change = 0
+                    else:
+                        hp_change = current_hp + hp_change
+                    server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
+    for row_id in st.session_state.edit_hp_values:
+        st.session_state[f"edit_hp_{row_id}"] = 0
+
+@st.dialog("Edit Initiative", icon="✏️", on_dismiss="rerun")
+def edit_initiative(row_id):
+    with st.form("edit_initiative_form"):
+        new_initiative = st.slider("New Initiative Value", min_value=1, max_value=30)
+        submitted = st.form_submit_button("Save")
+    if submitted:
+        with server_state_lock["initiative_list"]:
+            if row_id in server_state.initiative_list["ID"].values:
+                server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Initiative"] = new_initiative
+                server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
+        st.rerun()
 
 def ini_cycle():
     with server_state_lock["initiative"], server_state_lock["initiative_list"]:
@@ -327,106 +402,103 @@ def ini_cycle():
             server_state.prev_ini = server_state.initiative_list['ID'].values.tolist()
             server_state.prev_ini_list = server_state.initiative_list[['ID', 'Indicator']].values.tolist()
 
-if not st.session_state.ini_mode and not st.session_state.view_mode or (st.session_state.view_mode and st.session_state.exp_mode):
+autosave()
+
+#------------------------------
+# UI - VIEW MODES
+#------------------------------
+
+if not st.session_state.ini_mode and not st.session_state.view_mode:
     st.header("Characters")
     for index, row in filtered_pool.iterrows():
-        col1, col2, col3 = st.columns([0.5, 1, 1], gap="medium", vertical_alignment="center")
-        with col1:
-            st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
-        with col2:
-            initiative = st.slider(
-                f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}", label_visibility="collapsed"
-            )
-        with col3:
-            st.button(
-                f"Enter {row['Name']}",
-                key=f"enter_{row['ID']}",
-                on_click=add_to_initiative,
-                args=(row["ID"], initiative),
-                use_container_width=True,
-            )
+        with st.container(horizontal=True, border=True):
+            c1, c2, c3 = st.columns([1, 1, 1], gap="xsmall", vertical_alignment="center")
+            c1.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} (🛡️{row['Armor Class']} | ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+            ini_val = c2.slider(
+                    "Initiative", 1, 30, key=f"slider_{row['ID']}", label_visibility="collapsed"
+                )
+            c3.button(
+                    f"Enter {row['Name']}",
+                    key=f"enter_{row['ID']}",
+                    on_click=add_to_initiative,
+                    args=(row["ID"], ini_val),
+                    width="stretch",
+                )
 
-if not st.session_state.ini_mode and (st.session_state.view_mode or st.session_state.exp_mode or (st.session_state.view_mode and st.session_state.exp_mode)) or (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
+if not st.session_state.ini_mode and st.session_state.view_mode:
     st.header("Creatures")
+    if server_state.dmpool.empty:
+        st.info("No creatures currently in the pool. Add creatures below.")
     for index, row in filtered_dmpool.iterrows():
-        col1, col2, col3, col4 = st.columns([1, 1, 1, 1], gap="medium", vertical_alignment="center" )
-        with col1:
-            st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
-        with col2:
-            initiative = st.slider(
-                f"Initiative for {row['Name']}", 1, 30, key=f"slider_{row['ID']}", label_visibility="collapsed"
-            )
-        with col3:
-            st.button(
-                f"Enter {row['Name']}",
-                key=f"enter_{row['ID']}",
-                on_click=add_creature_to_initiative,
-                args=(row["ID"], initiative),
-                use_container_width=True,
-            )
-        with col4:
-            st.button(
-                f"Delete {row['Name']}",
-                key=f"remove_pool_{index}_{row['ID']}",
-                on_click=lambda creature_id=row["ID"]: delete_creature(creature_id),
-                use_container_width=True,
-            )
-
-if st.session_state.ini_mode or st.session_state.exp_mode:
-    st.header("Initiative - Round " + str(server_state.current_round))
-    for index, row in server_state.initiative_list.iterrows():
-        col1, col2, col3, col4, col5 = st.columns([0.15, 1.6, 0.4, 0.8, 0.8], gap="medium", vertical_alignment="center")
-        with col1:
-            st.markdown(f"<p style='font-size: 22px;'>{row['Indicator']}</p>", unsafe_allow_html=True)
-        with col2:
-            if row['Hitpoints'] > 0:
-                st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (🛡️{row['Armor Class']}, ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+        with st.container(horizontal=True, border=True):
+            c1, c2, c3 = st.columns([1, 1, 1], gap="xsmall", vertical_alignment="center")
+            c1.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']} | ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+            initiative = c2.slider(
+                    "Initiative", 1, 30, key=f"slider_{row['ID']}", label_visibility="collapsed"
+                )
+            if not st.session_state.delete_mode:
+                c3.button(
+                        f"Enter {row['Name']}",
+                        key=f"enter_{row['ID']}",
+                        on_click=add_creature_to_initiative,
+                        args=(row["ID"], initiative),
+                        width="stretch",
+                    )
             else:
-                st.markdown(f"<p style='font-size: 22px;'>{row['Name']} (🛡️{row['Armor Class']}, 💀)</p>", unsafe_allow_html=True)
+                c3.button(
+                    f"Delete {row['Name']}",
+                    key=f"remove_pool_{index}_{row['ID']}",
+                    on_click=lambda creature_id=row["ID"]: delete_creature(creature_id),
+                    width="stretch",
+                )
 
-        with col3:
-            st.markdown(f"<p style='font-size: 30px; text-align: left;'><span style='color: blue;'>{row['Initiative']}</span></p>", unsafe_allow_html=True)
-        with col4:
-            st.button(
-                f"Remove {row['Name']}",
-                key=f"remove_{index}_{row['ID']}",
-                on_click=remove_from_initiative,
-                args=(row["ID"],),
-                use_container_width=True
-            )
-        with col5:
-            st.session_state.edit_hp_values[row['ID']] = row["Hitpoints"]
-            hp_change = st.number_input(
-                f"Edit HP for {row['Name']}",
-                key=f"edit_hp_{row['ID']}",
-                label_visibility="collapsed",
-                step=1
-            )
-            st.session_state.edit_hp_values[row['ID']] = hp_change
-      
-def toggle_edit_hp():
-    with server_state_lock["initiative_list"]:
-        for row_id, hp_change in st.session_state.edit_hp_values.items():
-            if row_id is not None and hp_change is not None:
-                hitpoints = server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"]
-                if not hitpoints.empty:
-                    current_hp = hitpoints.iloc[0]
-                    if hp_change < 0 and current_hp <= abs(hp_change):
-                        hp_change = 0
-                    else:
-                        hp_change = current_hp + hp_change
-                    server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Hitpoints"] = hp_change
-    for row_id in st.session_state.edit_hp_values:
-        st.session_state[f"edit_hp_{row_id}"] = 0
-            
+if st.session_state.ini_mode:
+    st.header("Initiative - Round " + str(server_state.current_round))
+    if server_state.initiative_list.empty:
+        st.info("No combatants currently in initiative. Add characters or creatures.")
+    for index, row in server_state.initiative_list.iterrows():
+        with st.container(horizontal=True, border=True):
+            c1, c2, c3, c4, c5, c6 = st.columns([0.15, 1.4, 0.4, 0.8, 0.3, 0.6], gap="xsmall", vertical_alignment="center")
+            c1.markdown(f"<p style='font-size: 20px;'>{row['Indicator']}</p>", unsafe_allow_html=True)
+            with c2:
+                if row['Hitpoints'] > 0:
+                    st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']} | ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
+                else:
+                    st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']} |💀)</p>", unsafe_allow_html=True)
+            c3.markdown(f"<p style='font-size: 30px; text-align: center;'><span style='color: blue;'>{row['Initiative']}</span></p>", unsafe_allow_html=True)
+            with c4:
+                st.session_state.edit_hp_values[row['ID']] = row["Hitpoints"]
+                hp_change = st.number_input(
+                    f"Edit HP for {row['Name']}",
+                    key=f"edit_hp_{row['ID']}",
+                    label_visibility="collapsed",
+                    step=1
+                )
+                st.session_state.edit_hp_values[row['ID']] = hp_change
+            with c5:
+                st.button("💾", key=f"toggle_edit_hp_{row['ID']}", on_click=toggle_edit_hp, width="stretch")
+            with c6:
+                action = st.menu_button(
+                        "Options",
+                        options=["Remove", "Edit Ini"],
+                        key=f"action_{index}_{row['ID']}",
+                        width="stretch"
+                    )
+                if action == "Remove":
+                    remove_from_initiative(row["ID"])
+                if action == "Edit Ini":
+                    edit_initiative(row["ID"])
+
+#------------------------------
+# FUNCTION - RESET
+#------------------------------
+    
 def reset():
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"], server_state_lock["dmpool"]:
         initialize_pool.clear()
         initialize_pool()
         time.sleep(0.5)
-        load_character_pool()
-        time.sleep(0.5)
-        load_creature_pool()
+        load_pools()
         time.sleep(0.5)
         reset_initiative()
         time.sleep(0.5)
@@ -439,102 +511,36 @@ def reset():
         server_state.prev_ini = []
         server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
         server_state.current_round = 1
+        server_state.autosave_timer = None
+        st.toast("Initiative has been reset.", icon="✅", duration=3)
 
-def clear():
-    st.session_state.new_name = st.session_state.new_character_name
-    st.session_state.new_ac = st.session_state.new_character_ac
-    st.session_state.new_hp = st.session_state.new_character_hp
-    st.session_state.new_amount = st.session_state.new_character_amount
-    st.session_state.new_character_name = ""
-    st.session_state.new_character_ac = 10
-    st.session_state.new_character_hp = 10
-    st.session_state.new_character_amount = 1
+#------------------------------
+# UI - BOTTOM MENU
+#------------------------------
 
-if (not st.session_state.ini_mode and (st.session_state.view_mode or st.session_state.exp_mode)) or (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
-    if len(filtered_dmpool) != 1:
-        st.header("Add Creatures")
-        st.text_input("Character Name", key="new_character_name")
-        st.number_input("Armor Class", min_value=1, max_value=30, value=10, key="new_character_ac")
-        st.number_input("Hitpoints", min_value=0, value=10, key="new_character_hp")
-        st.number_input("Amount", min_value=1, value=1, key="new_character_amount")
-
-        col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
-        with col1:
-            if st.button("Add Creature", on_click=clear) and not st.session_state.button_pressed:
-                new_name = st.session_state.new_name
-                new_ac = st.session_state.new_ac
-                new_hp = st.session_state.new_hp
-                new_amount = st.session_state.new_amount
-                st.session_state.button_pressed = True
-                add_new_creature(new_name, new_ac, new_hp, new_amount)
-            st.session_state.button_pressed = False
-        with col2:
-            if st.button("Reset", on_click=clear):
-                reset()
-        with col3:
-            if st.button("Initiative") and not st.session_state.ini_pressed:
-                st.session_state.ini_pressed = True
-                if server_state.initiative_list.empty:
-                    load_initiative()
-                else:
-                    ini_cycle()
-            st.session_state.ini_pressed = False
-
-        col1, col2, col3 = st.columns([1, 1, 0.75], gap="large")
-        with col1:
-            if st.button("Save Characters"):
-                if not server_state.initiative_list.empty:
-                    error = st.error("Clear the initiative list before saving.")
-                    time.sleep(3)
-                    error.empty()
-                else:
-                    if not st.session_state.show_input:
-                        st.session_state.show_input = True
-                    elif st.session_state.verification == "Apfeltaschen":
-                        save_character_pool()
-                        save_creature_pool()
-                        saved = st.success("Characters saved successfully!")
-                        time.sleep(3)
-                        saved.empty()
-                        st.session_state.show_input = False
-                    elif st.session_state.verification != "Apfeltaschen":
-                        error = st.error("Incorrect verification code. Please try again.")
-                        time.sleep(3)
-                        error.empty()
-                        st.session_state.show_input = False
-            if st.session_state.show_input:
-                st.session_state.verification = st.text_input("Verification Code")
-        with col2:
-            if st.button("Load Characters"):
-                if not server_state.initiative_list.empty:
-                    error = st.error("Clear the initiative list before loading.")
-                    time.sleep(3)
-                    error.empty()
-                else:
-                    initialize_pool.clear()
-                    initialize_pool()
-                    time.sleep(0.5)
-                    load_creature_pool()
-                    time.sleep(0.5)
-                    load_character_pool()
-                    time.sleep(0.5)
-                    load_initiative()
-                    time.sleep(0.5)
-                    loaded = st.success("Characters loaded successfully!")
-                    time.sleep(3)
-                    loaded.empty()
-        with col3:
-            st.button("Edit HP", key="toggle_edit_hp", on_click=toggle_edit_hp)
-    
-if st.session_state.ini_mode and not (st.session_state.ini_mode and st.session_state.view_mode and st.session_state.exp_mode):
-    col1, col2 = st.columns([0.2, 0.6])
-    with col1:
-        if st.button("Initiative") and not st.session_state.ini_pressed:
-            st.session_state.ini_pressed = True
+with st.bottom:
+    if st.session_state.ini_mode:
+        ini_menu = st.container(horizontal=True, horizontal_alignment="center")
+        if ini_menu.button("Initiative"):
             if server_state.initiative_list.empty:
                 load_initiative()
             else:
                 ini_cycle()
-        st.session_state.ini_pressed = False
-    with col2:
-        st.button("Edit HP", key="toggle_edit_hp", on_click=toggle_edit_hp)
+    if not st.session_state.ini_mode and st.session_state.view_mode:
+        dm_menu = st.container(horizontal=True, horizontal_alignment="center")
+        if dm_menu.button("Add"):
+            add_dialog()
+        if dm_menu.button("Save"):
+            save_pools_dialog()
+        if dm_menu.button("Load"):
+            load_pools_dialog()
+        if dm_menu.button("Reset"):
+            reset()
+        if not st.session_state.delete_mode:
+            if dm_menu.button("Delete"):
+                st.session_state.delete_mode = True
+                st.rerun()
+        else:
+            if dm_menu.button("Enter"):
+                st.session_state.delete_mode = False
+                st.rerun()
