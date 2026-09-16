@@ -47,11 +47,27 @@ with st.sidebar:
 # INITIALIZATION
 #------------------------------
 
-DnD_Conditions = [
-    "Blinded", "Charmed", "Deafened", "Frightened", "Grappled", 
-    "Incapacitated", "Invisible", "Paralyzed", "Petrified", 
-    "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious", "Concentrating"
+dnd_conditions = [
+    "Blinded", "Charmed", "Concentrating", "Deafened", "Frightened",
+    "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified",
+    "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious"
 ]
+
+condition_symbols = {
+    "Blinded": "👁️", "Charmed": "💕", "Concentrating": "🔮", "Deafened": "👂",
+    "Frightened": "😱", "Grappled": "🤼", "Incapacitated": "🛑", "Invisible": "👻",
+    "Paralyzed": "🧍‍♂️", "Petrified": "🗿", "Poisoned": "🤢", "Prone": "🧎",
+    "Restrained": "⛓️", "Stunned": "💫", "Unconscious": "😴",
+}
+
+condition_colors = {
+    "Blinded": "red", "Charmed": "orange", "Concentrating": "orange", "Deafened": "yellow",
+    "Frightened": "blue", "Grappled": "green", "Incapacitated": "violet", "Invisible": "red",
+    "Paralyzed": "orange", "Petrified": "yellow", "Poisoned": "blue", "Prone": "green",
+    "Restrained": "violet", "Stunned": "violet", "Unconscious": "red",
+}
+
+dnd_conditions_display = [f"{condition_symbols[condition]} {condition}" for condition in dnd_conditions]
 
 @st.cache_data
 def initialize_pool():
@@ -78,7 +94,7 @@ if "creature_temp_pool" not in server_state:
 
 if "initiative_list" not in server_state:
     with server_state_lock["initiative_list"]:
-        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator", "Conditions"])
 
 if "new_character" not in st.session_state:
         st.session_state.new_character = {"Name": "", "Armor Class": 10, "Hitpoints": 10}
@@ -93,7 +109,7 @@ if "prev_ini" not in server_state:
         
 if "prev_ini_list" not in server_state:
     with server_state_lock["prev_ini_list"]:
-        server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator", "Conditions"])
 
 if "ini_pressed" not in st.session_state:
     st.session_state.ini_pressed = False
@@ -141,6 +157,9 @@ if "autosave_timer" not in server_state:
         
 if "delete_mode" not in st.session_state:
     st.session_state.delete_mode = False
+    
+if "symbol_mode" not in st.session_state:
+    st.session_state.symbol_mode = False
 
 #------------------------------
 # FUNCTIONS
@@ -222,7 +241,7 @@ def load_pools_dialog():
 
 def reset_initiative():
     with server_state_lock["initiative_list"]:
-        ini_reset = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        ini_reset = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator", "Conditions"])
         conn = st.connection("gsheets", type=GSheetsConnection)
         conn.update(data=ini_reset, worksheet="Initiative")
         
@@ -231,6 +250,7 @@ def load_initiative():
         conn = st.connection("gsheets", type=GSheetsConnection)
         loaded_ini = conn.read(worksheet="Initiative", ttl="0")
         loaded_ini["Indicator"] = loaded_ini["Indicator"].fillna("")
+        loaded_ini["Conditions"] = loaded_ini["Conditions"].fillna("")
         loaded_ini["Armor Class"] = loaded_ini["Armor Class"].astype(int)
         loaded_ini["Hitpoints"] = loaded_ini["Hitpoints"].astype(int)
         loaded_ini["Initiative"] = loaded_ini["Initiative"].astype(int)
@@ -248,7 +268,7 @@ def add_to_initiative(character_id, initiative):
     with server_state_lock["pool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         character = server_state.pool.loc[server_state.pool["ID"] == character_id].iloc[0]
         server_state.pool = server_state.pool[server_state.pool["ID"] != character_id]
-        new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"], "Initiative": initiative, "Indicator": ""}
+        new_row = {"ID": character_id, "Name": character["Name"], "Armor Class": character["Armor Class"], "Hitpoints": character["Hitpoints"], "Initiative": initiative, "Indicator": "", "Conditions": ""}
         server_state.initiative_list = pd.concat(
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
@@ -260,7 +280,7 @@ def add_creature_to_initiative(creature_id, initiative):
     with server_state_lock["dmpool"], server_state_lock["initiative_list"], server_state_lock["initiative"]:
         creature = server_state.dmpool.loc[server_state.dmpool["ID"] == creature_id].iloc[0]
         server_state.dmpool = server_state.dmpool[server_state.dmpool["ID"] != creature_id]
-        new_row = {"ID": str(int(creature_id)) + "C", "Name": creature["Name"], "Armor Class": creature["Armor Class"], "Hitpoints": creature["Hitpoints"], "Initiative": initiative, "Indicator": ""}
+        new_row = {"ID": str(int(creature_id)) + "C", "Name": creature["Name"], "Armor Class": creature["Armor Class"], "Hitpoints": creature["Hitpoints"], "Initiative": initiative, "Indicator": "", "Conditions": ""}
         server_state.initiative_list = pd.concat(
             [server_state.initiative_list, pd.DataFrame([new_row])], ignore_index=True
         )
@@ -353,6 +373,29 @@ def edit_initiative(row_id):
             if row_id in server_state.initiative_list["ID"].values:
                 server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Initiative"] = new_initiative
                 server_state.initiative_list.sort_values(by="Initiative", ascending=False, inplace=True)
+        st.rerun()
+
+def display_conditions(conditions):
+    if not conditions:
+        return ""
+    condition_list = conditions.split()
+    if st.session_state.symbol_mode:
+        return " ".join(condition_symbols.get(s, s) for s in condition_list)
+    return " ".join(
+        f":{condition_colors.get(condition, condition)}-badge[{condition}]"
+        for condition in condition_list
+    )
+
+@st.dialog("Manage Conditions", icon="🧪", on_dismiss="rerun")
+def manage_conditions(row_id):
+    with st.form("manage_conditions_form"):
+        new_conditions = st.multiselect("Conditions:", dnd_conditions_display, key="condition_select", select_all=False, filter_mode=None)
+        submitted = st.form_submit_button("Save")
+    if submitted:
+        with server_state_lock["initiative_list"]:
+            if row_id in server_state.initiative_list["ID"].values:
+                added_conditions = [condition.split(" ", 1)[1] for condition in new_conditions]
+                server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Conditions"] = " ".join(added_conditions)
         st.rerun()
 
 def ini_cycle():
@@ -469,8 +512,11 @@ if st.session_state.ini_mode and not st.session_state.edit_mode:
         st.info("No combatants currently in initiative. Add characters or creatures.")
     for index, row in server_state.initiative_list.iterrows():
         with st.container(horizontal=True, border=True):
-            c1, c2, c3, c4, c5, c6 = st.columns([0.15, 1.4, 0.4, 0.8, 0.3, 0.6], gap="xsmall", vertical_alignment="center")
-            c1.markdown(f"<p style='font-size: 20px;'>{row['Indicator']}</p>", unsafe_allow_html=True)
+            c1, c2, c3, c4, c5, c6 = st.columns([0.5, 1.4, 0.4, 0.8, 0.3, 0.6], gap="xsmall", vertical_alignment="center")
+            displayed_conditions = display_conditions(row['Conditions'])
+            with c1:
+                centered = st.container(horizontal=True, horizontal_alignment="center")
+                centered.markdown(displayed_conditions)
             with c2:
                 if row['Hitpoints'] > 0:
                     st.markdown(f"<p style='font-size: 20px; text-align: center;'>{row['Name']} <br>(🛡️{row['Armor Class']} | ❤️{row['Hitpoints']})</p>", unsafe_allow_html=True)
@@ -491,7 +537,7 @@ if st.session_state.ini_mode and not st.session_state.edit_mode:
             with c6:
                 action = st.menu_button(
                         "Options",
-                        options=["Remove", "Edit Ini"],
+                        options=["Remove", "Edit Ini", "Conditions"],
                         key=f"action_{index}_{row['ID']}",
                         width="stretch"
                     )
@@ -499,6 +545,8 @@ if st.session_state.ini_mode and not st.session_state.edit_mode:
                     remove_from_initiative(row["ID"])
                 if action == "Edit Ini":
                     edit_initiative(row["ID"])
+                if action == "Conditions":
+                    manage_conditions(row["ID"])
 
 if st.session_state.edit_mode:
     c1, c2 = st.columns(2)
@@ -528,14 +576,14 @@ def reset():
         time.sleep(0.5)
         reset_initiative()
         time.sleep(0.5)
-        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        server_state.initiative_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator", "Conditions"])
         server_state.initiative = 0
         server_state.ini_length = 0
         server_state.next_initiative = 0
         server_state.current_character_id = None
         server_state.previous_character_id = None
         server_state.prev_ini = []
-        server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator"])
+        server_state.prev_ini_list = pd.DataFrame(columns=["ID", "Name", "Armor Class", "Hitpoints", "Initiative", "Indicator", "Conditions"])
         server_state.current_round = 1
         server_state.autosave_timer = None
         st.toast("Initiative has been reset.", icon="✅", duration=3)
@@ -547,11 +595,19 @@ def reset():
 with st.bottom:
     if st.session_state.ini_mode and not st.session_state.view_mode:
         ini_menu = st.container(horizontal=True, horizontal_alignment="center")
-        if ini_menu.button("Initiative"):
-            if server_state.initiative_list.empty:
-                load_initiative()
-            else:
-                ini_cycle()
+        #if ini_menu.button("Initiative"):
+        #    if server_state.initiative_list.empty:
+        #        load_initiative()
+        #    else:
+        #        ini_cycle()
+        if not st.session_state.symbol_mode:
+            if ini_menu.button("Show Symbols"):
+                st.session_state.symbol_mode = True
+                st.rerun()
+        else:
+            if ini_menu.button("Show Text"):
+                st.session_state.symbol_mode = False
+                st.rerun()
     if not st.session_state.ini_mode and st.session_state.view_mode and not st.session_state.edit_mode:
         dm_menu = st.container(horizontal=True, horizontal_alignment="center")
         if dm_menu.button("Add"):
