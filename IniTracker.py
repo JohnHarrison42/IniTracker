@@ -48,23 +48,27 @@ with st.sidebar:
 #------------------------------
 
 dnd_conditions = [
-    "Blinded", "Charmed", "Concentrating", "Deafened", "Frightened",
-    "Grappled", "Incapacitated", "Invisible", "Paralyzed", "Petrified",
-    "Poisoned", "Prone", "Restrained", "Stunned", "Unconscious"
+    "Blessed", "Blinded", "Bleeding", "Charmed", "Concentrating", "Cursed",
+    "Deafened", "Enlarged", "Exhausted", "Frightened", "Grappled", "Hastened",
+    "Hexed", "Hunter's Mark", "Incapacitated", "Invisible", "Magical Effect",
+    "Paralyzed", "Petrified", "Poisoned", "Prone", "Raging", "Reduced",
+    "Restrained", "Stunned", "Unconscious"
 ]
 
 condition_symbols = {
-    "Blinded": "👁️", "Charmed": "💕", "Concentrating": "🔮", "Deafened": "👂",
-    "Frightened": "😱", "Grappled": "🤼", "Incapacitated": "🛑", "Invisible": "👻",
-    "Paralyzed": "🧍‍♂️", "Petrified": "🗿", "Poisoned": "🤢", "Prone": "🧎",
-    "Restrained": "⛓️", "Stunned": "💫", "Unconscious": "😴",
+    "Blessed": "😇", "Blinded": "👁️", "Bleeding": "🩸", "Charmed": "💕", "Concentrating": "🔮",
+    "Cursed": "☠️", "Deafened": "👂", "Enlarged": "🔼", "Exhausted": "🥱", "Frightened": "😱",
+    "Grappled": "🤼", "Hastened": "⚡", "Hexed": "🕸️", "Hunter's Mark": "🎯", "Incapacitated": "🛑",
+    "Invisible": "👻", "Magical Effect": "✨", "Paralyzed": "🧍‍♂️","Petrified": "🗿", "Poisoned": "🤢",
+    "Prone": "🧎", "Raging": "🔥", "Reduced": "🔽", "Restrained": "⛓️", "Stunned": "💫", "Unconscious": "😴",
 }
 
 condition_colors = {
-    "Blinded": "red", "Charmed": "orange", "Concentrating": "orange", "Deafened": "yellow",
-    "Frightened": "blue", "Grappled": "green", "Incapacitated": "violet", "Invisible": "red",
-    "Paralyzed": "orange", "Petrified": "yellow", "Poisoned": "blue", "Prone": "green",
-    "Restrained": "violet", "Stunned": "violet", "Unconscious": "red",
+    "Blessed": "red", "Blinded": "orange", "Bleeding": "yellow", "Charmed": "blue", "Concentrating": "green",
+    "Cursed": "violet", "Deafened": "red", "Enlarged": "orange", "Exhausted": "yellow", "Frightened": "blue",
+    "Grappled": "green", "Hastened": "violet", "Hexed": "red", "Hunter's Mark": "orange", "Incapacitated": "yellow",
+    "Invisible": "blue", "Magical Effect": "green", "Paralyzed": "violet", "Petrified": "red", "Poisoned": "orange",
+    "Prone": "yellow", "Raging": "blue", "Reduced": "green", "Restrained": "violet", "Stunned": "red", "Unconscious": "orange",
 }
 
 dnd_conditions_display = [f"{condition_symbols[condition]} {condition}" for condition in dnd_conditions]
@@ -378,7 +382,7 @@ def edit_initiative(row_id):
 def display_conditions(conditions):
     if not conditions:
         return ""
-    condition_list = conditions.split()
+    condition_list = conditions.split(", ")
     if st.session_state.symbol_mode:
         return " ".join(condition_symbols.get(s, s) for s in condition_list)
     return " ".join(
@@ -395,7 +399,7 @@ def manage_conditions(row_id):
         with server_state_lock["initiative_list"]:
             if row_id in server_state.initiative_list["ID"].values:
                 added_conditions = [condition.split(" ", 1)[1] for condition in new_conditions]
-                server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Conditions"] = " ".join(added_conditions)
+                server_state.initiative_list.loc[server_state.initiative_list["ID"] == row_id, "Conditions"] = ", ".join(added_conditions)
         st.rerun()
 
 def ini_cycle():
